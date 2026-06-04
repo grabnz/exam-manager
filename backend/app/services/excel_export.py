@@ -243,9 +243,8 @@ def export_session(session) -> bytes:
     sheet_names = [s["name"] for s in EXAM_SHEETS]
     DATA_ROW_F  = 2
     NAME_COL_F  = 1
-    EXAM_COLS_F = list(range(2, 2 + len(sheet_names)))
-    BONUS_COL_F = EXAM_COLS_F[-1] + 1
-    FINAL_COL_F = BONUS_COL_F + 1
+    EXAM_COLS_F = list(range(2, 2 + len(sheet_names)))   # cols 2,3,4
+    FINAL_COL_F = EXAM_COLS_F[-1] + 1                    # col 5
 
     COLORS_MAP = {
         "Prod. écrite et écriture": ("C6DFEF", "EBF3FB"),
@@ -256,8 +255,7 @@ def export_session(session) -> bytes:
     headers_f = (
         [(NAME_COL_F, "التلاميذ", "D9D9D9")] +
         [(ci, n, COLORS_MAP[n][0]) for ci, n in zip(EXAM_COLS_F, sheet_names)] +
-        [(BONUS_COL_F, "Bonus", "E2EFDA")] +
-        [(FINAL_COL_F, "Note Finale", "FFE699")]
+        [(FINAL_COL_F, "Moyenne / Note Finale", "FFE699")]
     )
     for ci, lbl, clr in headers_f:
         c = ws.cell(row=1, column=ci, value=lbl)
@@ -265,8 +263,22 @@ def export_session(session) -> bytes:
             mkfill(clr), Font(bold=True, size=10), mkalign(), mkborder()
         )
 
-    all_fields = {n: sum([flds for _, flds in s["subsections"]], [])
-                  for n, s in zip(sheet_names, EXAM_SHEETS)}
+    # Compute resolved totals per exam (accounts for _st overrides in each sheet)
+    def _exam_total(sc, cfg):
+        total = 0.0
+        for sub_label, sub_flds in cfg["subsections"]:
+            if len(sub_flds) >= 2:
+                st_fn    = _st_field(sub_flds)
+                direct   = getattr(sc, st_fn, None) if sc and st_fn else None
+                if direct is not None:
+                    total += direct
+                    continue
+                bonus_fn = _bonus_field(sub_flds)
+                bonus_v  = getattr(sc, bonus_fn, None) if sc and bonus_fn else None
+                total += sum(getattr(sc, f, 0) or 0 for f in sub_flds) + (bonus_v or 0)
+            else:
+                total += sum(getattr(sc, f, 0) or 0 for f in sub_flds)
+        return total
 
     for ri, student in enumerate(students, DATA_ROW_F):
         sc = scores_map.get(student.id)
@@ -276,20 +288,18 @@ def export_session(session) -> bytes:
             Alignment(horizontal="right", vertical="center"),
             mkborder()
         )
-        for ci, sname in zip(EXAM_COLS_F, sheet_names):
-            val = sum(getattr(sc, f, 0) or 0 for f in all_fields[sname]) if sc else 0
+        section_vals = []
+        for ci, cfg in zip(EXAM_COLS_F, EXAM_SHEETS):
+            val = _exam_total(sc, cfg)
+            section_vals.append(val)
             c = ws.cell(row=ri, column=ci, value=val or None)
             c.fill, c.alignment, c.border = (
-                mkfill(COLORS_MAP[sname][1]), mkalign(), mkborder()
+                mkfill(COLORS_MAP[cfg["name"]][1]), mkalign(), mkborder()
             )
-        # Bonus — editable
-        c = ws.cell(row=ri, column=BONUS_COL_F)
-        c.fill, c.alignment, c.border = mkfill("E2EFDA"), mkalign(), mkborder()
 
-        # Note Finale = exam totals + bonus
-        refs = "+".join(f"{get_column_letter(ci)}{ri}" for ci in EXAM_COLS_F)
-        refs += f"+{get_column_letter(BONUS_COL_F)}{ri}"
-        c = ws.cell(row=ri, column=FINAL_COL_F, value=f"={refs}")
+        # Note Finale = average of 3 exam totals
+        average = sum(section_vals) / 3 if any(section_vals) else None
+        c = ws.cell(row=ri, column=FINAL_COL_F, value=round(average, 2) if average else None)
         c.fill, c.font, c.alignment, c.border = (
             mkfill("FFF2CC"), Font(bold=True, size=11), mkalign(), mkborder()
         )
@@ -298,8 +308,7 @@ def export_session(session) -> bytes:
     ws.column_dimensions[get_column_letter(EXAM_COLS_F[0])].width = 20
     ws.column_dimensions[get_column_letter(EXAM_COLS_F[1])].width = 12
     ws.column_dimensions[get_column_letter(EXAM_COLS_F[2])].width = 20
-    ws.column_dimensions[get_column_letter(BONUS_COL_F)].width   = 9
-    ws.column_dimensions[get_column_letter(FINAL_COL_F)].width   = 13
+    ws.column_dimensions[get_column_letter(FINAL_COL_F)].width   = 18
     ws.row_dimensions[1].height = 40
     for ri in range(DATA_ROW_F, DATA_ROW_F + len(students)):
         ws.row_dimensions[ri].height = 18

@@ -106,11 +106,17 @@ export default function ScoreEntry() {
   const [mobileIdx,    setMobileIdx]    = useState<number | null>(null)
   const [xlsxError,    setXlsxError]    = useState('')
   const [xlsxLoading,  setXlsxLoading]  = useState(false)
+  const [search,       setSearch]       = useState('')
 
   const { data: session } = useQuery<SessionInfo>({ queryKey: ['session', id], queryFn: () => api.sessions.get(id!) })
   const { data: rows = [], isLoading } = useQuery<ScoreRow[]>({ queryKey: ['scores', id], queryFn: () => api.scores.get(id!) })
 
   useEffect(() => { if (rows.length) setScoreMap(initMap(rows)) }, [rows])
+
+  // Filter students by search term (works for Arabic + Latin substrings)
+  const visibleRows = search.trim()
+    ? rows.filter(r => r.student_name.includes(search.trim()))
+    : rows
 
   const update = useCallback((sid: string, field: string, raw: string) => {
     const val = raw === '' ? null : parseFloat(raw)
@@ -210,6 +216,34 @@ export default function ScoreEntry() {
         </button>
       </div>
 
+      {/* ── Search bar (hidden on finale tab) ── */}
+      {activeTab !== 'finale' && (
+        <div className="px-4 md:px-6 py-2 flex-shrink-0">
+          <div className="relative max-w-sm">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+            <input
+              type="text"
+              placeholder="Rechercher un élève…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full pl-8 pr-8 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white arabic"
+              dir="rtl"
+            />
+            {search && (
+              <button onClick={() => setSearch('')}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                ✕
+              </button>
+            )}
+          </div>
+          {search && (
+            <p className="text-xs text-gray-400 mt-1 ml-1">
+              {visibleRows.length} élève{visibleRows.length !== 1 ? 's' : ''} trouvé{visibleRows.length !== 1 ? 's' : ''}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* ── Content ── */}
       <div className="flex-1 overflow-auto px-4 md:px-6 pb-8">
         {isLoading ? (
@@ -218,24 +252,25 @@ export default function ScoreEntry() {
           </div>
         ) : activeTab === 'finale' ? (
           <>
-            {/* Mobile finale */}
             <div className="md:hidden space-y-2 pt-1">
               <MobileFinaleList rows={rows} scoreMap={scoreMap} />
             </div>
-            {/* Desktop finale */}
             <div className="hidden md:block">
               <DesktopFinale rows={rows} scoreMap={scoreMap} />
             </div>
           </>
         ) : (
           <>
-            {/* Mobile: student list */}
+            {/* Mobile: filtered student list */}
             <div className="md:hidden space-y-2 pt-1">
-              <MobileStudentList rows={rows} tab={tab} scoreMap={scoreMap} onSelect={setMobileIdx} />
+              <MobileStudentList rows={visibleRows} tab={tab} scoreMap={scoreMap} onSelect={i => {
+                // map filtered index back to original index for the editor
+                setMobileIdx(rows.indexOf(visibleRows[i]))
+              }} />
             </div>
-            {/* Desktop: wide table */}
+            {/* Desktop: filtered table */}
             <div className="hidden md:block">
-              <DesktopTable rows={rows} tab={tab} scoreMap={scoreMap} onUpdate={update} />
+              <DesktopTable rows={visibleRows} tab={tab} scoreMap={scoreMap} onUpdate={update} />
             </div>
           </>
         )}
@@ -407,7 +442,7 @@ function MobileFinaleList({ rows, scoreMap }: { rows: ScoreRow[]; scoreMap: Scor
         const p = tabTot(row.student_id, TABS[0], scoreMap)
         const l = tabTot(row.student_id, TABS[1], scoreMap)
         const c = tabTot(row.student_id, TABS[2], scoreMap)
-        const total = p + l + c
+        const total = (p + l + c) / 3
         return (
           <div key={row.student_id} className="bg-white border border-gray-200 rounded-xl p-4">
             <div className="flex items-center justify-between mb-3">
@@ -586,7 +621,7 @@ function DesktopFinale({ rows, scoreMap }: { rows: ScoreRow[]; scoreMap: ScoreMa
                 <td className="bg-prod-light border border-gray-200 px-4 py-2 text-center">{fmt(p)}</td>
                 <td className="bg-lecture-light border border-gray-200 px-4 py-2 text-center">{fmt(l)}</td>
                 <td className="bg-com-light border border-gray-200 px-4 py-2 text-center">{fmt(c)}</td>
-                <td className="bg-finale-light border border-gray-200 px-4 py-2 text-center font-bold text-gray-900 text-base">{fmt(p+l+c)}</td>
+                <td className="bg-finale-light border border-gray-200 px-4 py-2 text-center font-bold text-gray-900 text-base">{fmt((p+l+c)/3)}</td>
               </tr>
             )
           })}

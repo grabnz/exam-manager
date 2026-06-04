@@ -106,7 +106,7 @@ export default function PrintFinale() {
               <th className="border border-gray-300 px-3 py-2 text-center bg-blue-50">Prod. écrite</th>
               <th className="border border-gray-300 px-3 py-2 text-center bg-green-50">Lecture</th>
               <th className="border border-gray-300 px-3 py-2 text-center bg-orange-50">Com. Orale</th>
-              <th className="border border-gray-300 px-3 py-2 text-center bg-yellow-50 font-bold">Note Finale</th>
+              <th className="border border-gray-300 px-3 py-2 text-center bg-yellow-50 font-bold">Moyenne / Note Finale</th>
               <th className="border border-gray-300 px-3 py-2 text-center w-24">Signature</th>
             </tr>
           </thead>
@@ -115,7 +115,7 @@ export default function PrintFinale() {
               const p = calcTab(row, SUBSECTIONS.prod)
               const l = calcTab(row, SUBSECTIONS.lecture)
               const c = calcTab(row, SUBSECTIONS.com)
-              const f = p + l + c
+              const f = (p + l + c) / 3
               return (
                 <tr key={row.student_id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                   <td className="border border-gray-300 px-3 py-2 text-center text-gray-400 text-xs">{i + 1}</td>
