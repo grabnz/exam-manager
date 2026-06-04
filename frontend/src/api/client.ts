@@ -34,17 +34,17 @@ export interface SessionInfo {
 export type ScoreRow = {
   student_id: string; student_name: string; order_index: number
   prod_dictee_c4?: number | null
-  prod_ecriture_c2?: number | null; prod_ecriture_c7?: number | null
+  prod_ecriture_c2?: number | null; prod_ecriture_c7?: number | null; prod_ecriture_bonus?: number | null
   prod_production_c1?: number | null; prod_production_c3?: number | null
-  prod_production_c5?: number | null; prod_production_c6?: number | null
-  lect_vocale_c1?: number | null; lect_vocale_c5?: number | null
+  prod_production_c5?: number | null; prod_production_c6?: number | null; prod_production_bonus?: number | null
+  lect_vocale_c1?: number | null; lect_vocale_c5?: number | null; lect_vocale_bonus?: number | null
   lect_comp_c2?: number | null; lect_comp_c3?: number | null
-  lect_comp_c4?: number | null; lect_comp_c6?: number | null
+  lect_comp_c4?: number | null; lect_comp_c6?: number | null; lect_comp_bonus?: number | null
   com_rec_c1?: number | null; com_rec_c2?: number | null
-  com_rec_c3?: number | null; com_rec_c4?: number | null
+  com_rec_c3?: number | null; com_rec_c4?: number | null; com_rec_bonus?: number | null
   com_oral_c1?: number | null; com_oral_c2?: number | null
   com_oral_c3?: number | null; com_oral_c4?: number | null
-  com_oral_c5?: number | null; com_oral_c6?: number | null
+  com_oral_c5?: number | null; com_oral_c6?: number | null; com_oral_bonus?: number | null
 }
 
 // ── API calls ──────────────────────────────────────────────────────────────
