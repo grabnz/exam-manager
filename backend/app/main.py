@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -8,9 +10,14 @@ Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Exam Score Manager", version="1.0.0")
 
+# ALLOWED_ORIGINS env var: comma-separated list e.g. "https://exam-manager.vercel.app"
+# Falls back to wildcard for local development.
+_raw = os.getenv("ALLOWED_ORIGINS", "*")
+origins = [o.strip() for o in _raw.split(",")] if _raw != "*" else ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],   # tighten in production
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
