@@ -65,38 +65,44 @@ class StudentScore(Base):
 
     # ── Prod. écrite et écriture ──────────────────────────────────────────
     prod_dictee_c4       = Column(Float)
-    prod_ecriture_c2     = Column(Float)
-    prod_ecriture_c7     = Column(Float)
-    prod_ecriture_bonus  = Column(Float)
-    prod_production_c1   = Column(Float)
-    prod_production_c3   = Column(Float)
-    prod_production_c5   = Column(Float)
-    prod_production_c6   = Column(Float)
+    prod_ecriture_c2      = Column(Float)
+    prod_ecriture_c7      = Column(Float)
+    prod_ecriture_bonus   = Column(Float)
+    prod_ecriture_st      = Column(Float)   # direct subtotal override
+    prod_production_c1    = Column(Float)
+    prod_production_c3    = Column(Float)
+    prod_production_c5    = Column(Float)
+    prod_production_c6    = Column(Float)
     prod_production_bonus = Column(Float)
+    prod_production_st    = Column(Float)   # direct subtotal override
 
     # ── Lecture ───────────────────────────────────────────────────────────
     lect_vocale_c1    = Column(Float)
     lect_vocale_c5    = Column(Float)
     lect_vocale_bonus = Column(Float)
+    lect_vocale_st    = Column(Float)   # direct subtotal override
     lect_comp_c2      = Column(Float)
     lect_comp_c3      = Column(Float)
     lect_comp_c4      = Column(Float)
     lect_comp_c6      = Column(Float)
     lect_comp_bonus   = Column(Float)
+    lect_comp_st      = Column(Float)   # direct subtotal override
 
     # ── Com. Orale et Récitation ──────────────────────────────────────────
-    com_rec_c1   = Column(Float)
-    com_rec_c2   = Column(Float)
-    com_rec_c3   = Column(Float)
-    com_rec_c4   = Column(Float)
+    com_rec_c1    = Column(Float)
+    com_rec_c2    = Column(Float)
+    com_rec_c3    = Column(Float)
+    com_rec_c4    = Column(Float)
     com_rec_bonus = Column(Float)
-    com_oral_c1  = Column(Float)
-    com_oral_c2  = Column(Float)
-    com_oral_c3  = Column(Float)
-    com_oral_c4  = Column(Float)
-    com_oral_c5  = Column(Float)
-    com_oral_c6  = Column(Float)
+    com_rec_st    = Column(Float)   # direct subtotal override
+    com_oral_c1   = Column(Float)
+    com_oral_c2   = Column(Float)
+    com_oral_c3   = Column(Float)
+    com_oral_c4   = Column(Float)
+    com_oral_c5   = Column(Float)
+    com_oral_c6   = Column(Float)
     com_oral_bonus = Column(Float)
+    com_oral_st    = Column(Float)   # direct subtotal override
 
     session = relationship("ExamSession", back_populates="scores")
     student = relationship("Student", back_populates="scores")

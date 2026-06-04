@@ -6,7 +6,12 @@ import { api, SessionInfo, ScoreRow } from '../api/client'
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Field = keyof Omit<ScoreRow, 'student_id' | 'student_name' | 'order_index'>
 
-interface Subsection { label: string; fields: Field[]; bonusField?: Field }
+interface Subsection {
+  label: string
+  fields: Field[]
+  bonusField?: Field
+  stField?: Field   // when set: directly editable S.T. that overrides criteria+bonus
+}
 interface Tab {
   key: string; label: string
   hdrBg: string; dataBg: string; stBg: string; totalBg: string
@@ -24,8 +29,8 @@ const TABS: Tab[] = [
     tabActive: 'bg-prod-dark text-white', tabInactive: 'bg-prod-light text-prod-dark hover:bg-prod-mid',
     subsections: [
       { label: 'Dictée',       fields: ['prod_dictee_c4'] },
-      { label: 'Écriture',     fields: ['prod_ecriture_c2', 'prod_ecriture_c7'],                                               bonusField: 'prod_ecriture_bonus' },
-      { label: 'Prod. écrite', fields: ['prod_production_c1', 'prod_production_c3', 'prod_production_c5', 'prod_production_c6'], bonusField: 'prod_production_bonus' },
+      { label: 'Écriture',     fields: ['prod_ecriture_c2', 'prod_ecriture_c7'],                                                bonusField: 'prod_ecriture_bonus',   stField: 'prod_ecriture_st' },
+      { label: 'Prod. écrite', fields: ['prod_production_c1', 'prod_production_c3', 'prod_production_c5', 'prod_production_c6'], bonusField: 'prod_production_bonus', stField: 'prod_production_st' },
     ],
   },
   {
@@ -34,8 +39,8 @@ const TABS: Tab[] = [
     cardBg: 'bg-green-50', cardBorder: 'border-green-200', accentText: 'text-green-800',
     tabActive: 'bg-lecture-dark text-white', tabInactive: 'bg-lecture-light text-lecture-dark hover:bg-lecture-mid',
     subsections: [
-      { label: 'Vocale',        fields: ['lect_vocale_c1', 'lect_vocale_c5'],                            bonusField: 'lect_vocale_bonus' },
-      { label: 'Compréhension', fields: ['lect_comp_c2', 'lect_comp_c3', 'lect_comp_c4', 'lect_comp_c6'], bonusField: 'lect_comp_bonus' },
+      { label: 'Vocale',        fields: ['lect_vocale_c1', 'lect_vocale_c5'],                             bonusField: 'lect_vocale_bonus', stField: 'lect_vocale_st' },
+      { label: 'Compréhension', fields: ['lect_comp_c2', 'lect_comp_c3', 'lect_comp_c4', 'lect_comp_c6'], bonusField: 'lect_comp_bonus',   stField: 'lect_comp_st' },
     ],
   },
   {
@@ -44,8 +49,8 @@ const TABS: Tab[] = [
     cardBg: 'bg-orange-50', cardBorder: 'border-orange-200', accentText: 'text-orange-800',
     tabActive: 'bg-com-dark text-white', tabInactive: 'bg-com-light text-com-dark hover:bg-com-mid',
     subsections: [
-      { label: 'Récitation', fields: ['com_rec_c1', 'com_rec_c2', 'com_rec_c3', 'com_rec_c4'],                                            bonusField: 'com_rec_bonus' },
-      { label: 'Com. Orale', fields: ['com_oral_c1', 'com_oral_c2', 'com_oral_c3', 'com_oral_c4', 'com_oral_c5', 'com_oral_c6'], bonusField: 'com_oral_bonus' },
+      { label: 'Récitation', fields: ['com_rec_c1', 'com_rec_c2', 'com_rec_c3', 'com_rec_c4'],                                             bonusField: 'com_rec_bonus',  stField: 'com_rec_st' },
+      { label: 'Com. Orale', fields: ['com_oral_c1', 'com_oral_c2', 'com_oral_c3', 'com_oral_c4', 'com_oral_c5', 'com_oral_c6'], bonusField: 'com_oral_bonus', stField: 'com_oral_st' },
     ],
   },
 ]
@@ -54,7 +59,12 @@ const TABS: Tab[] = [
 type ScoreMap = Record<string, Record<string, number | null>>
 
 function allFields(tab: Tab): Field[] {
-  return tab.subsections.flatMap(s => s.bonusField ? [...s.fields, s.bonusField] : s.fields)
+  return tab.subsections.flatMap(s => {
+    const fs: Field[] = [...s.fields]
+    if (s.bonusField) fs.push(s.bonusField)
+    if (s.stField)    fs.push(s.stField)
+    return fs
+  })
 }
 function initMap(rows: ScoreRow[]): ScoreMap {
   const map: ScoreMap = {}
@@ -66,9 +76,17 @@ function initMap(rows: ScoreRow[]): ScoreMap {
   }
   return map
 }
-function subTot(sid: string, sub: Subsection, map: ScoreMap) {
-  const c = sub.fields.reduce((s, f) => s + (map[sid]?.[f] ?? 0), 0)
-  return c + (sub.bonusField ? (map[sid]?.[sub.bonusField] ?? 0) : 0)
+function subTot(sid: string, sub: Subsection, map: ScoreMap): number {
+  // If a direct S.T. override has been entered, use it
+  if (sub.stField) {
+    const direct = map[sid]?.[sub.stField] ?? null
+    if (direct !== null) return direct as number
+  }
+  const crit = sub.fields.reduce((s, f) => s + (map[sid]?.[f] ?? 0), 0)
+  return crit + (sub.bonusField ? (map[sid]?.[sub.bonusField] ?? 0) : 0)
+}
+function isDirect(sid: string, sub: Subsection, map: ScoreMap): boolean {
+  return !!sub.stField && (map[sid]?.[sub.stField] ?? null) !== null
 }
 function tabTot(sid: string, tab: Tab, map: ScoreMap) {
   return tab.subsections.reduce((s, sub) => s + subTot(sid, sub, map), 0)
@@ -284,8 +302,8 @@ function MobileEditor({ rows, idx, tab, scoreMap, onUpdate, onClose, onNavigate,
                 )}
               </div>
 
-              {/* Criteria grid */}
-              <div className="grid grid-cols-3 gap-2">
+              {/* Criteria grid — dimmed when direct S.T. is active */}
+              <div className={`grid grid-cols-3 gap-2 transition-opacity ${isDirect(row.student_id, sub, scoreMap) ? 'opacity-40 pointer-events-none' : ''}`}>
                 {sub.fields.map(f => (
                   <div key={f}>
                     <label className="text-xs text-gray-500 mb-1 block text-center">
@@ -307,6 +325,37 @@ function MobileEditor({ rows, idx, tab, scoreMap, onUpdate, onClose, onNavigate,
                   </div>
                 )}
               </div>
+
+              {/* Direct S.T. override */}
+              {sub.stField && (
+                <div className="mt-3 pt-3 border-t border-dashed border-gray-300">
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1">
+                      <label className="text-xs font-semibold text-gray-600 mb-1 block">
+                        Total direct{isDirect(row.student_id, sub, scoreMap) ? ' ✓' : ' (optionnel)'}
+                      </label>
+                      <input type="number" min={0} step={0.25} inputMode="decimal"
+                             className={`w-full border rounded-xl px-3 py-2.5 text-center text-lg font-bold focus:outline-none focus:ring-2 ${
+                               isDirect(row.student_id, sub, scoreMap)
+                                 ? 'border-blue-400 bg-blue-50 focus:ring-blue-400'
+                                 : 'border-gray-300 bg-white focus:ring-gray-400'
+                             }`}
+                             placeholder="Entrer le total directement"
+                             value={scoreMap[row.student_id]?.[sub.stField] ?? ''}
+                             onChange={e => onUpdate(row.student_id, sub.stField!, e.target.value)} />
+                    </div>
+                    {isDirect(row.student_id, sub, scoreMap) && (
+                      <button onClick={() => onUpdate(row.student_id, sub.stField!, '')}
+                              className="mt-5 text-xs text-red-400 hover:text-red-600 border border-red-200 rounded-lg px-2 py-2">
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                  {isDirect(row.student_id, sub, scoreMap) && (
+                    <p className="text-xs text-blue-600 mt-1">Les critères sont ignorés</p>
+                  )}
+                </div>
+              )}
             </div>
           )
         })}
@@ -435,8 +484,21 @@ function DesktopTable({ rows, tab, scoreMap, onUpdate }: {
                     </td>
                   )}
                   {sub.bonusField && (
-                    <td key={`${sub.label}-s`} className={`${tab.stBg} border border-gray-200 px-2 py-1.5 text-center font-bold text-gray-800 text-sm`}>
-                      {fmt(subTot(row.student_id, sub, scoreMap))}
+                    <td key={`${sub.label}-s`} className={`${tab.stBg} border border-gray-200 p-0`}>
+                      {sub.stField ? (
+                        <input
+                          type="number" min={0} step={0.25}
+                          className="score-input h-8 px-1 w-16 font-bold"
+                          title="Entrez un total direct, ou laissez vide pour calculer automatiquement"
+                          placeholder={isDirect(row.student_id, sub, scoreMap) ? '' : fmt(subTot(row.student_id, sub, scoreMap))}
+                          value={scoreMap[row.student_id]?.[sub.stField] ?? ''}
+                          onChange={e => onUpdate(row.student_id, sub.stField!, e.target.value)}
+                        />
+                      ) : (
+                        <span className="block px-2 text-center font-bold text-gray-800 text-sm">
+                          {fmt(subTot(row.student_id, sub, scoreMap))}
+                        </span>
+                      )}
                     </td>
                   )}
                 </>
