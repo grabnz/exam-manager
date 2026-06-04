@@ -81,7 +81,8 @@ def _extract_meta(text: str, meta: dict):
     # School year: "2025 - 2026" or "2025-2026"
     m = re.search(r"(\d{4})\s*[-–]\s*(\d{4})", text)
     if m:
-        meta["school_year"] = f"{m.group(1)}-{m.group(2)}"
+        y1, y2 = int(m.group(1)), int(m.group(2))
+        meta["school_year"] = f"{min(y1, y2)}-{max(y1, y2)}"
 
     # Trimester: "الثلاثي 1" / "الثلاثي 2" / "الثلاثي 3"
     m = re.search(r"الثلاثي\s*(\d)", text)
