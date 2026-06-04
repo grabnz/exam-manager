@@ -1,15 +1,5 @@
 {
-  "experimentalServices": {
-    "frontend": {
-      "root": "frontend",
-      "framework": "vite",
-      "routePrefix": "/"
-    },
-    "backend": {
-      "root": "backend",
-      "runtime": "@vercel/python",
-      "entrypoint": "api/index.py",
-      "routePrefix": "/api"
-    }
-  }
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "framework": "vite"
 }
