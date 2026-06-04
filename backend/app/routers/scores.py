@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
-import io
+import io, traceback, urllib.parse
 
 from ..database import get_db
 from ..models import ExamSession, StudentScore
@@ -53,15 +53,23 @@ def save_scores(session_id: str, body: ScoresSave, db: Session = Depends(get_db)
 
 @router.get("/{session_id}/export")
 def export_excel(session_id: str, db: Session = Depends(get_db)):
-    s = db.query(ExamSession).filter_by(id=session_id).first()
-    if not s:
-        raise HTTPException(404)
+    try:
+        s = db.query(ExamSession).filter_by(id=session_id).first()
+        if not s:
+            raise HTTPException(404)
 
-    xlsx_bytes = export_session(s)
-    filename   = f"{s.class_.name}_T{s.trimester}_{s.exam_type}.xlsx"
+        xlsx_bytes = export_session(s)
 
-    return StreamingResponse(
-        io.BytesIO(xlsx_bytes),
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
-    )
+        # RFC 5987 encoded filename — safe for all HTTP clients
+        safe_name = urllib.parse.quote(f"{s.class_.name}_T{s.trimester}.xlsx")
+        content_disposition = f"attachment; filename=\"scores.xlsx\"; filename*=UTF-8''{safe_name}"
+
+        return Response(
+            content=xlsx_bytes,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": content_disposition},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, detail=f"{e}\n{traceback.format_exc()}")

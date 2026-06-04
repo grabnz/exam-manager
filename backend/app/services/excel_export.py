@@ -58,6 +58,24 @@ def _crit_label(field: str) -> str:
     return field.split("_")[-1].upper()
 
 
+def _st_field(fields: list) -> str | None:
+    """Derive the _st override field from the first criterion field.
+    e.g. ['prod_ecriture_c2', ...] → 'prod_ecriture_st'
+    """
+    if len(fields) < 2:
+        return None
+    parts = fields[0].split("_")
+    return "_".join(parts[:-1]) + "_st"
+
+
+def _bonus_field(fields: list) -> str | None:
+    """Derive the bonus field name from the first criterion field."""
+    if len(fields) < 2:
+        return None
+    parts = fields[0].split("_")
+    return "_".join(parts[:-1]) + "_bonus"
+
+
 def export_session(session) -> bytes:
     """
     Takes an ExamSession ORM object (with .class_.students and .scores loaded).
@@ -141,17 +159,8 @@ def export_session(session) -> bytes:
                 mkfill(clr), Font(bold=True, size=9), mkalign(), mkborder()
             )
 
-        # Pre-compute crit cols / bonus col / subtotal col per subsection
-        crit_cols_by_sub = {}
-        bonus_col_of     = {}
-        subtotal_col_of  = {}
-        for ci, (typ, sub, _) in enumerate(col_specs, 2):
-            if typ == "crit":
-                crit_cols_by_sub.setdefault(sub, []).append(ci)
-            elif typ == "bonus":
-                bonus_col_of[sub] = ci
-            elif typ == "subtotal":
-                subtotal_col_of[sub] = ci
+        # Pre-compute fields list per subsection for _st/_bonus derivation
+        fields_by_sub = {sub: flds for sub, flds in subsections}
 
         # Student rows
         for ri, student in enumerate(students, DATA_ROW):
@@ -162,7 +171,7 @@ def export_session(session) -> bytes:
                 Alignment(horizontal="right", vertical="center"),
                 mkborder()
             )
-            sub_totals = {}
+            crit_totals = {}   # sub_label → sum of raw criteria values
             for ci, (typ, sub, field) in enumerate(col_specs, 2):
                 cell = ws.cell(row=ri, column=ci)
                 if typ == "crit":
@@ -171,23 +180,44 @@ def export_session(session) -> bytes:
                     cell.fill, cell.alignment, cell.border = (
                         mkfill(cfg["data_bg"]), mkalign(), mkborder()
                     )
-                    sub_totals[sub] = sub_totals.get(sub, 0) + (val or 0)
+                    crit_totals[sub] = crit_totals.get(sub, 0) + (val or 0)
                 elif typ == "bonus":
+                    bonus_fname = _bonus_field(fields_by_sub.get(sub, []))
+                    bonus_val = getattr(sc, bonus_fname, None) if sc and bonus_fname else None
+                    cell.value = bonus_val
                     cell.fill, cell.alignment, cell.border = (
                         mkfill("E2EFDA"), mkalign(), mkborder()
                     )
                 elif typ == "subtotal":
-                    st = sub_totals.get(sub, 0) or None
-                    cell.value = st
+                    sub_fields = fields_by_sub.get(sub, [])
+                    # Use _st direct override if present, else calculate
+                    st_fname   = _st_field(sub_fields)
+                    direct     = getattr(sc, st_fname, None) if sc and st_fname else None
+                    if direct is not None:
+                        st_val = direct
+                    else:
+                        bonus_fname = _bonus_field(sub_fields)
+                        bonus_val   = getattr(sc, bonus_fname, None) if sc and bonus_fname else None
+                        st_val = crit_totals.get(sub, 0) + (bonus_val or 0)
+                    cell.value = st_val or None
                     cell.fill = mkfill(cfg["crit_hdr_bg"])
                     cell.font = Font(bold=True, size=9)
                     cell.alignment, cell.border = mkalign(), mkborder()
                 else:  # total
-                    total_val = sum(
-                        (sub_totals.get(sub_l, 0) if len(crits) >= 2
-                         else sub_totals.get(sub_l, 0))
-                        for sub_l, crits in subsections
-                    )
+                    # Sum: for each subsection use its resolved subtotal
+                    total_val = 0.0
+                    for sub_l, sub_flds in subsections:
+                        if len(sub_flds) >= 2:
+                            st_fn = _st_field(sub_flds)
+                            direct_v = getattr(sc, st_fn, None) if sc and st_fn else None
+                            if direct_v is not None:
+                                total_val += direct_v
+                            else:
+                                bonus_fn  = _bonus_field(sub_flds)
+                                bonus_v   = getattr(sc, bonus_fn, None) if sc and bonus_fn else None
+                                total_val += crit_totals.get(sub_l, 0) + (bonus_v or 0)
+                        else:
+                            total_val += crit_totals.get(sub_l, 0)
                     cell.value = total_val or None
                     cell.fill = mkfill(cfg["total_data"])
                     cell.font = Font(bold=True, size=10)

@@ -13,6 +13,14 @@ body {
   font-family: 'Segoe UI', Tahoma, sans-serif;
 }
 
+/* Print styles */
+@media print {
+  body { font-size: 11px; }
+  .print\:hidden { display: none !important; }
+  table { page-break-inside: auto; }
+  tr { page-break-inside: avoid; }
+}
+
 /* Hide scrollbar but keep scroll (for tab overflow on mobile) */
 .scrollbar-hide { scrollbar-width: none; }
 .scrollbar-hide::-webkit-scrollbar { display: none; }

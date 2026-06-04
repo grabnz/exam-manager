@@ -169,6 +169,10 @@ export default function ScoreEntry() {
                     className="text-xs border border-gray-300 hover:border-gray-400 px-2 py-1.5 rounded-lg">
               ↓ Excel
             </button>
+            <button onClick={() => window.open(`/sessions/${id}/print`, '_blank')}
+                    className="text-xs border border-red-300 hover:border-red-400 text-red-600 px-2 py-1.5 rounded-lg">
+              ↓ PDF
+            </button>
             <button onClick={save} disabled={saving || !isDirty}
                     className="text-xs bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white px-3 py-1.5 rounded-lg font-medium">
               {saving ? '…' : isDirty ? 'Sauver' : '✓'}
