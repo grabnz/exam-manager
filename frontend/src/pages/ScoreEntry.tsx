@@ -327,6 +327,7 @@ function MobileEditor({ rows, idx, tab, scoreMap, onUpdate, onClose, onNavigate,
                     <input type="number" min={0} step={0.25} inputMode="decimal"
                            className="w-full border border-gray-200 bg-white rounded-xl px-2 py-2.5 text-center text-base focus:outline-none focus:ring-2 focus:ring-blue-400"
                            value={scoreMap[row.student_id]?.[f] ?? ''}
+                           onFocus={e => e.target.select()}
                            onChange={e => onUpdate(row.student_id, f, e.target.value)} />
                   </div>
                 ))}
@@ -336,6 +337,7 @@ function MobileEditor({ rows, idx, tab, scoreMap, onUpdate, onClose, onNavigate,
                     <input type="number" min={0} step={0.25} inputMode="decimal"
                            className="w-full border border-green-300 bg-green-50 rounded-xl px-2 py-2.5 text-center text-base focus:outline-none focus:ring-2 focus:ring-green-400"
                            value={scoreMap[row.student_id]?.[sub.bonusField] ?? ''}
+                           onFocus={e => e.target.select()}
                            onChange={e => onUpdate(row.student_id, sub.bonusField!, e.target.value)} />
                   </div>
                 )}
@@ -486,16 +488,38 @@ function DesktopTable({ rows, tab, scoreMap, onUpdate }: {
                 <>
                   {sub.fields.map(f => (
                     <td key={f} className={`border border-gray-200 p-0 ${tab.dataBg}`}>
-                      <input type="number" min={0} step={0.25} className="score-input h-8 px-1 w-14"
-                             value={scoreMap[row.student_id]?.[f] ?? ''}
-                             onChange={e => onUpdate(row.student_id, f, e.target.value)} />
+                      <input
+                        type="number" min={0} step={0.25}
+                        data-row={i} data-field={f}
+                        className="score-input h-8 px-1 w-14"
+                        value={scoreMap[row.student_id]?.[f] ?? ''}
+                        onFocus={e => e.target.select()}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            document.querySelector<HTMLInputElement>(`[data-row="${i+1}"][data-field="${f}"]`)?.focus()
+                          }
+                        }}
+                        onChange={e => onUpdate(row.student_id, f, e.target.value)}
+                      />
                     </td>
                   ))}
                   {sub.bonusField && (
                     <td key={`${sub.label}-b`} className="border border-gray-200 p-0 bg-[#E2EFDA]">
-                      <input type="number" min={0} step={0.25} className="score-input h-8 px-1 w-14"
-                             value={scoreMap[row.student_id]?.[sub.bonusField] ?? ''}
-                             onChange={e => onUpdate(row.student_id, sub.bonusField!, e.target.value)} />
+                      <input
+                        type="number" min={0} step={0.25}
+                        data-row={i} data-field={sub.bonusField}
+                        className="score-input h-8 px-1 w-14"
+                        value={scoreMap[row.student_id]?.[sub.bonusField] ?? ''}
+                        onFocus={e => e.target.select()}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault()
+                            document.querySelector<HTMLInputElement>(`[data-row="${i+1}"][data-field="${sub.bonusField}"]`)?.focus()
+                          }
+                        }}
+                        onChange={e => onUpdate(row.student_id, sub.bonusField!, e.target.value)}
+                      />
                     </td>
                   )}
                   {sub.bonusField && (
@@ -503,10 +527,18 @@ function DesktopTable({ rows, tab, scoreMap, onUpdate }: {
                       {sub.stField ? (
                         <input
                           type="number" min={0} step={0.25}
+                          data-row={i} data-field={sub.stField}
                           className="score-input h-8 px-1 w-16 font-bold"
-                          title="Entrez un total direct, ou laissez vide pour calculer automatiquement"
+                          title="Total direct (laissez vide pour calculer depuis les critères)"
                           placeholder={isDirect(row.student_id, sub, scoreMap) ? '' : fmt(subTot(row.student_id, sub, scoreMap))}
                           value={scoreMap[row.student_id]?.[sub.stField] ?? ''}
+                          onFocus={e => e.target.select()}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault()
+                              document.querySelector<HTMLInputElement>(`[data-row="${i+1}"][data-field="${sub.stField}"]`)?.focus()
+                            }
+                          }}
                           onChange={e => onUpdate(row.student_id, sub.stField!, e.target.value)}
                         />
                       ) : (
