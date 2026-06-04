@@ -68,7 +68,7 @@ export default function ClassDetail() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-8 grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <main className="max-w-5xl mx-auto px-4 md:px-6 py-6 md:py-8 grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
 
         {/* Exam sessions grid */}
         <div className="lg:col-span-2">

@@ -58,7 +58,7 @@ export default function Dashboard() {
         <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={handleFile} />
       </header>
 
-      <main className="max-w-5xl mx-auto px-6 py-8">
+      <main className="max-w-5xl mx-auto px-4 md:px-6 py-6 md:py-8">
         {error && (
           <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
             {error}
