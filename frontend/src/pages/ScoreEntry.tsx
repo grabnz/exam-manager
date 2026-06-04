@@ -98,12 +98,14 @@ export default function ScoreEntry() {
   const { id }   = useParams<{ id: string }>()
   const navigate = useNavigate()
 
-  const [activeTab,  setActiveTab]  = useState('prod')
-  const [scoreMap,   setScoreMap]   = useState<ScoreMap>({})
-  const [isDirty,    setIsDirty]    = useState(false)
-  const [saving,     setSaving]     = useState(false)
-  const [saveMsg,    setSaveMsg]    = useState('')
-  const [mobileIdx,  setMobileIdx]  = useState<number | null>(null)  // selected student on mobile
+  const [activeTab,    setActiveTab]    = useState('prod')
+  const [scoreMap,     setScoreMap]     = useState<ScoreMap>({})
+  const [isDirty,      setIsDirty]      = useState(false)
+  const [saving,       setSaving]       = useState(false)
+  const [saveMsg,      setSaveMsg]      = useState('')
+  const [mobileIdx,    setMobileIdx]    = useState<number | null>(null)
+  const [xlsxError,    setXlsxError]    = useState('')
+  const [xlsxLoading,  setXlsxLoading]  = useState(false)
 
   const { data: session } = useQuery<SessionInfo>({ queryKey: ['session', id], queryFn: () => api.sessions.get(id!) })
   const { data: rows = [], isLoading } = useQuery<ScoreRow[]>({ queryKey: ['scores', id], queryFn: () => api.scores.get(id!) })
@@ -165,9 +167,18 @@ export default function ScoreEntry() {
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {saveMsg && <span className="hidden sm:block text-xs text-green-600 font-medium">{saveMsg}</span>}
-            <button onClick={() => window.open(api.scores.exportUrl(id!), '_blank')}
-                    className="text-xs border border-gray-300 hover:border-gray-400 px-2 py-1.5 rounded-lg">
-              ↓ Excel
+            {xlsxError && <span className="text-xs text-red-500">{xlsxError}</span>}
+            <button
+              disabled={xlsxLoading}
+              onClick={async () => {
+                setXlsxError('')
+                setXlsxLoading(true)
+                const err = await api.scores.downloadExcel(id!)
+                setXlsxLoading(false)
+                if (err) setXlsxError('Export échoué')
+              }}
+              className="text-xs border border-gray-300 hover:border-gray-400 disabled:opacity-50 px-2 py-1.5 rounded-lg">
+              {xlsxLoading ? '…' : '↓ Excel'}
             </button>
             <button onClick={() => window.open(`/sessions/${id}/print`, '_blank')}
                     className="text-xs border border-red-300 hover:border-red-400 text-red-600 px-2 py-1.5 rounded-lg">

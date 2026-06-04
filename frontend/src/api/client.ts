@@ -80,6 +80,19 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scores }),
       }),
-    exportUrl: (sessionId: string) => `${BASE}/sessions/${sessionId}/export`,
+    downloadExcel: async (sessionId: string): Promise<string | null> => {
+      const res = await fetch(`${BASE}/sessions/${sessionId}/export`)
+      if (!res.ok) return await res.text().catch(() => `Erreur ${res.status}`)
+      const blob = await res.blob()
+      const cd   = res.headers.get('Content-Disposition') ?? ''
+      const name = cd.match(/filename\*?=(?:UTF-8'')?([^;"\n]+)/i)?.[1]
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      a.href     = url
+      a.download = decodeURIComponent(name ?? 'scores.xlsx')
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+      return null  // null = success
+    },
   },
 }
