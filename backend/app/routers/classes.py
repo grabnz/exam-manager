@@ -93,10 +93,11 @@ def get_class(class_id: str, db: Session = Depends(get_db)):
 
     sessions = [
         {
-            "id":         s.id,
-            "trimester":  s.trimester,
-            "exam_type":  s.exam_type,
-            "has_scores": len(s.scores) > 0,
+            "id":           s.id,
+            "trimester":    s.trimester,
+            "exam_type":    s.exam_type,
+            "has_scores":   len(s.scores) > 0,
+            "is_finalized": s.is_finalized,
         }
         for s in c.sessions
     ]

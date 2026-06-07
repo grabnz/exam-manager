@@ -3,6 +3,7 @@ import Dashboard from './pages/Dashboard'
 import ClassDetail from './pages/ClassDetail'
 import ScoreEntry from './pages/ScoreEntry'
 import PrintFinale from './pages/PrintFinale'
+import Profile from './pages/Profile'
 
 export default function App() {
   return (
@@ -12,6 +13,7 @@ export default function App() {
         <Route path="/classes/:id"            element={<ClassDetail />} />
         <Route path="/sessions/:id"           element={<ScoreEntry />} />
         <Route path="/sessions/:id/print"     element={<PrintFinale />} />
+        <Route path="/profile"                element={<Profile />} />
       </Routes>
     </BrowserRouter>
   )

@@ -200,12 +200,15 @@ function SessionBtn({ label, session, loading, onClick, onDelete, accent = false
   const hasScores = session?.has_scores
   const exists    = !!session
 
+  const isFinalized = session?.is_finalized
+
   let cls = 'flex-1 arabic py-2 rounded-lg text-xs font-medium transition text-center '
-  if (loading)        cls += 'bg-gray-100 text-gray-400 cursor-wait'
-  else if (hasScores) cls += 'bg-green-100 text-green-700 hover:bg-green-200'
-  else if (exists)    cls += 'bg-blue-50 text-blue-600 hover:bg-blue-100'
-  else if (accent)    cls += 'bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-200'
-  else                cls += 'bg-gray-100 text-gray-500 hover:bg-gray-200'
+  if (loading)         cls += 'bg-gray-100 text-gray-400 cursor-wait'
+  else if (isFinalized) cls += 'bg-green-100 text-green-700 hover:bg-green-200'
+  else if (hasScores)  cls += 'bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200'
+  else if (exists)     cls += 'bg-blue-50 text-blue-600 hover:bg-blue-100'
+  else if (accent)     cls += 'bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-200'
+  else                 cls += 'bg-gray-100 text-gray-500 hover:bg-gray-200'
 
   return (
     <div className="flex items-center gap-1">
@@ -214,7 +217,7 @@ function SessionBtn({ label, session, loading, onClick, onDelete, accent = false
           <span className="flex items-center justify-between px-2">
             <span>{label}</span>
             <span className="text-gray-400 font-normal">
-              {hasScores ? '✓' : exists ? 'Saisir' : 'Créer'}
+              {isFinalized ? '🔒 ✓' : hasScores ? 'En cours' : exists ? 'Saisir' : 'Créer'}
             </span>
           </span>
         )}

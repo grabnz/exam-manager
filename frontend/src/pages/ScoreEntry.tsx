@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, SessionInfo, ScoreRow } from '../api/client'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -107,9 +107,13 @@ export default function ScoreEntry() {
   const [xlsxError,    setXlsxError]    = useState('')
   const [xlsxLoading,  setXlsxLoading]  = useState(false)
   const [search,       setSearch]       = useState('')
+  const [finalizing,   setFinalizing]   = useState(false)
+  const qc = useQueryClient()
 
-  const { data: session } = useQuery<SessionInfo>({ queryKey: ['session', id], queryFn: () => api.sessions.get(id!) })
+  const { data: session } = useQuery<SessionInfo>({ queryKey: ['session', id], queryFn: () => api.sessions.get(id!), refetchOnWindowFocus: false })
   const { data: rows = [], isLoading } = useQuery<ScoreRow[]>({ queryKey: ['scores', id], queryFn: () => api.scores.get(id!) })
+
+  const locked = session?.is_finalized ?? false
 
   useEffect(() => { if (rows.length) setScoreMap(initMap(rows)) }, [rows])
 
@@ -119,11 +123,19 @@ export default function ScoreEntry() {
     : rows
 
   const update = useCallback((sid: string, field: string, raw: string) => {
+    if (locked) return   // read-only when finalized
     const val = raw === '' ? null : parseFloat(raw)
     setScoreMap(prev => ({ ...prev, [sid]: { ...prev[sid], [field]: isNaN(val as number) ? null : val } }))
     setIsDirty(true)
     setSaveMsg('')
-  }, [])
+  }, [locked])
+
+  async function toggleFinalize() {
+    setFinalizing(true)
+    await api.sessions.finalize(id!, !locked)
+    await qc.invalidateQueries({ queryKey: ['session', id] })
+    setFinalizing(false)
+  }
 
   async function save() {
     setSaving(true)
@@ -174,6 +186,14 @@ export default function ScoreEntry() {
           <div className="flex items-center gap-2 flex-shrink-0">
             {saveMsg && <span className="hidden sm:block text-xs text-green-600 font-medium">{saveMsg}</span>}
             {xlsxError && <span className="text-xs text-red-500">{xlsxError}</span>}
+
+            {/* Lock indicator */}
+            {locked && (
+              <span className="hidden sm:flex items-center gap-1 text-xs text-green-700 bg-green-50 border border-green-200 px-2 py-1 rounded-lg font-medium">
+                🔒 Finalisé
+              </span>
+            )}
+
             <button
               disabled={xlsxLoading}
               onClick={async () => {
@@ -190,9 +210,26 @@ export default function ScoreEntry() {
                     className="text-xs border border-red-300 hover:border-red-400 text-red-600 px-2 py-1.5 rounded-lg">
               ↓ PDF
             </button>
-            <button onClick={save} disabled={saving || !isDirty}
-                    className="text-xs bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white px-3 py-1.5 rounded-lg font-medium">
-              {saving ? '…' : isDirty ? 'Sauver' : '✓'}
+
+            {/* Save — hidden when finalized */}
+            {!locked && (
+              <button onClick={save} disabled={saving || !isDirty}
+                      className="text-xs bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white px-3 py-1.5 rounded-lg font-medium">
+                {saving ? '…' : isDirty ? 'Sauver' : '✓'}
+              </button>
+            )}
+
+            {/* Finalize / Unlock */}
+            <button
+              onClick={toggleFinalize}
+              disabled={finalizing}
+              className={`text-xs px-3 py-1.5 rounded-lg font-medium transition ${
+                locked
+                  ? 'border border-amber-300 text-amber-700 hover:bg-amber-50'
+                  : 'bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-300'
+              }`}
+            >
+              {finalizing ? '…' : locked ? '🔓 Déverrouiller' : '🔒 Finaliser'}
             </button>
           </div>
         </div>
@@ -215,6 +252,18 @@ export default function ScoreEntry() {
           Note Finale
         </button>
       </div>
+
+      {/* ── Lock banner ── */}
+      {locked && (
+        <div className="flex items-center gap-2 px-4 md:px-6 py-2 bg-green-50 border-b border-green-200 text-sm text-green-800 flex-shrink-0">
+          <span>🔒</span>
+          <span className="font-medium">Examen finalisé — notes en lecture seule.</span>
+          <button onClick={toggleFinalize} disabled={finalizing}
+                  className="ml-auto text-xs text-amber-600 hover:underline">
+            Déverrouiller
+          </button>
+        </div>
+      )}
 
       {/* ── Search bar (hidden on finale tab) ── */}
       {activeTab !== 'finale' && (

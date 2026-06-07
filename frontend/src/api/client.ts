@@ -19,15 +19,18 @@ export interface YearGroup { label: string; classes: ClassSummary[] }
 
 export interface Student { id: string; full_name: string; order_index: number }
 export interface SessionSummary {
-  id: string; trimester: number; exam_type: string; has_scores: boolean
+  id: string; trimester: number; exam_type: string
+  has_scores: boolean; is_finalized: boolean
 }
+
+export interface TeacherProfile { name: string; grade: string }
 export interface ClassDetail {
   id: string; name: string; teacher?: string; school_year: string
   students: Student[]; sessions: SessionSummary[]
 }
 
 export interface SessionInfo {
-  id: string; trimester: number; exam_type: string
+  id: string; trimester: number; exam_type: string; is_finalized: boolean
   class_id: string; class_name: string; school_year: string; teacher?: string
 }
 
@@ -70,7 +73,21 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ trimester, exam_type: examType }),
       }),
-    delete: (id: string) => req<void>(`/sessions/${id}`, { method: 'DELETE' }),
+    delete:   (id: string) => req<void>(`/sessions/${id}`, { method: 'DELETE' }),
+    finalize: (id: string, finalized: boolean) =>
+      req<{ ok: boolean; is_finalized: boolean }>(`/sessions/${id}/finalize`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ finalized }),
+      }),
+  },
+  profile: {
+    get: () => req<TeacherProfile>('/profile'),
+    save: (data: TeacherProfile) => req<TeacherProfile>('/profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
   },
   scores: {
     get:    (sessionId: string) => req<ScoreRow[]>(`/sessions/${sessionId}/scores`),

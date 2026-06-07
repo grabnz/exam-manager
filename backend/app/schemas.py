@@ -63,3 +63,12 @@ class ScoresSave(BaseModel):
 class SessionCreate(BaseModel):
     trimester: int
     exam_type: str
+
+
+class FinalizeBody(BaseModel):
+    finalized: bool
+
+
+class ProfileUpdate(BaseModel):
+    name:  str
+    grade: str

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, Float, ForeignKey, DateTime, UniqueConstraint
+from sqlalchemy import Column, String, Integer, Float, Boolean, ForeignKey, DateTime, UniqueConstraint
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -46,15 +46,23 @@ class Student(Base):
 
 class ExamSession(Base):
     __tablename__ = "exam_sessions"
-    id         = Column(String, primary_key=True, default=_id)
-    class_id   = Column(String, ForeignKey("classes.id"), nullable=False)
-    trimester  = Column(Integer, nullable=False)          # 1 / 2 / 3
-    exam_type  = Column(String, nullable=False)           # "امتحان" / "فرض"
-    created_at = Column(DateTime, default=datetime.utcnow)
-    class_     = relationship("Class", back_populates="sessions")
-    scores     = relationship("StudentScore", back_populates="session",
-                              cascade="all, delete-orphan")
+    id           = Column(String, primary_key=True, default=_id)
+    class_id     = Column(String, ForeignKey("classes.id"), nullable=False)
+    trimester    = Column(Integer, nullable=False)
+    exam_type    = Column(String, nullable=False)
+    is_finalized = Column(Boolean, default=False, nullable=False)
+    created_at   = Column(DateTime, default=datetime.utcnow)
+    class_       = relationship("Class", back_populates="sessions")
+    scores       = relationship("StudentScore", back_populates="session",
+                                cascade="all, delete-orphan")
     __table_args__ = (UniqueConstraint("class_id", "trimester", "exam_type"),)
+
+
+class TeacherProfile(Base):
+    __tablename__ = "teacher_profile"
+    id    = Column(Integer, primary_key=True, default=1)
+    name  = Column(String, default="")
+    grade = Column(String, default="")  # رتبة
 
 
 class StudentScore(Base):
