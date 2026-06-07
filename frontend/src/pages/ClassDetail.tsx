@@ -21,7 +21,8 @@ export default function ClassDetail() {
   const navigate  = useNavigate()
   const qc        = useQueryClient()
   const [deleting,  setDeleting]  = useState(false)
-  const [creating,  setCreating]  = useState<string | null>(null) // key being created
+  const [creating,  setCreating]  = useState<string | null>(null)
+  const [deletingS, setDeletingS] = useState<string | null>(null) // session id being deleted
 
   const { data, isLoading, error } = useQuery<ClassDetailType>({
     queryKey: ['class', id],
@@ -46,6 +47,14 @@ export default function ClassDetail() {
     setDeleting(true)
     await api.classes.delete(id!)
     navigate('/')
+  }
+
+  async function deleteSession(sessionId: string, examType: string) {
+    if (!confirm(`Supprimer "${examType}" et toutes ses notes ?`)) return
+    setDeletingS(sessionId)
+    await api.sessions.delete(sessionId)
+    await qc.invalidateQueries({ queryKey: ['class', id] })
+    setDeletingS(null)
   }
 
   if (isLoading) return <Loading />
@@ -123,8 +132,9 @@ export default function ClassDetail() {
                         key={s.id}
                         label={s.exam_type}
                         session={s}
-                        loading={creating === `${t}-${s.exam_type}`}
+                        loading={creating === `${t}-${s.exam_type}` || deletingS === s.id}
                         onClick={() => openOrCreate(t, s.exam_type)}
+                        onDelete={() => deleteSession(s.id, s.exam_type)}
                       />
                     ))}
 
@@ -145,8 +155,9 @@ export default function ClassDetail() {
                     <SessionBtn
                       label={IMTIHAN}
                       session={imtihan}
-                      loading={creating === `${t}-${IMTIHAN}`}
+                      loading={creating === `${t}-${IMTIHAN}` || deletingS === imtihan?.id}
                       onClick={() => openOrCreate(t, IMTIHAN)}
+                      onDelete={imtihan ? () => deleteSession(imtihan.id, IMTIHAN) : undefined}
                       accent
                     />
                   </div>
@@ -178,34 +189,48 @@ export default function ClassDetail() {
 }
 
 // ── Session button ─────────────────────────────────────────────────────────────
-function SessionBtn({ label, session, loading, onClick, accent = false }: {
+function SessionBtn({ label, session, loading, onClick, onDelete, accent = false }: {
   label: string
   session?: SessionSummary
   loading: boolean
   onClick: () => void
+  onDelete?: () => void
   accent?: boolean
 }) {
   const hasScores = session?.has_scores
   const exists    = !!session
 
-  let cls = 'w-full arabic py-2 rounded-lg text-xs font-medium transition text-center '
-  if (loading)       cls += 'bg-gray-100 text-gray-400 cursor-wait'
+  let cls = 'flex-1 arabic py-2 rounded-lg text-xs font-medium transition text-center '
+  if (loading)        cls += 'bg-gray-100 text-gray-400 cursor-wait'
   else if (hasScores) cls += 'bg-green-100 text-green-700 hover:bg-green-200'
   else if (exists)    cls += 'bg-blue-50 text-blue-600 hover:bg-blue-100'
   else if (accent)    cls += 'bg-orange-50 text-orange-600 hover:bg-orange-100 border border-orange-200'
   else                cls += 'bg-gray-100 text-gray-500 hover:bg-gray-200'
 
   return (
-    <button onClick={onClick} disabled={loading} className={cls}>
-      {loading ? '…' : (
-        <span className="flex items-center justify-between px-2">
-          <span>{label}</span>
-          <span className="text-gray-400 font-normal">
-            {hasScores ? '✓' : exists ? 'Saisir' : 'Créer'}
+    <div className="flex items-center gap-1">
+      <button onClick={onClick} disabled={loading} className={cls}>
+        {loading ? '…' : (
+          <span className="flex items-center justify-between px-2">
+            <span>{label}</span>
+            <span className="text-gray-400 font-normal">
+              {hasScores ? '✓' : exists ? 'Saisir' : 'Créer'}
+            </span>
           </span>
-        </span>
+        )}
+      </button>
+      {/* Delete button — only shown when session exists */}
+      {exists && onDelete && (
+        <button
+          onClick={e => { e.stopPropagation(); onDelete() }}
+          disabled={loading}
+          title="Supprimer"
+          className="flex-shrink-0 w-6 h-6 flex items-center justify-center rounded text-gray-300 hover:text-red-500 hover:bg-red-50 transition disabled:opacity-30"
+        >
+          ✕
+        </button>
       )}
-    </button>
+    </div>
   )
 }
 
