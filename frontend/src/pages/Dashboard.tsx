@@ -60,8 +60,8 @@ export default function Dashboard() {
       <header className="bg-white border-b border-gray-200 px-4 md:px-6 py-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Gestion des Notes</h1>
-            <p className="text-sm text-gray-500">Français — École primaire</p>
+            <h1 className="text-xl font-bold text-gray-900">إدارة النقاط</h1>
+            <p className="arabic text-sm text-gray-500">اللغة الفرنسية — المرحلة الابتدائية</p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -71,7 +71,7 @@ export default function Dashboard() {
               disabled={uploading}
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-3 md:px-4 py-2 rounded-lg text-sm font-medium transition"
             >
-              {uploading ? <><Spinner /> <span className="hidden md:inline">Import…</span></> : <><UploadIcon /> <span className="hidden md:inline">Importer PDF</span></>}
+              {uploading ? <><Spinner /> <span className="hidden md:inline arabic">جاري الاستيراد…</span></> : <><UploadIcon /> <span className="hidden md:inline arabic">استيراد PDF</span></>}
             </button>
 
             {/* Hamburger / nav menu */}
@@ -85,8 +85,8 @@ export default function Dashboard() {
               {menuOpen && (
                 <div className="absolute right-0 mt-1 w-52 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
                   <button onClick={() => { setMenuOpen(false); navigate('/profile') }}
-                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 text-left border-b border-gray-100">
-                    <span className="text-base">👩‍🏫</span> Profil enseignant
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 text-right border-b border-gray-100 arabic" dir="rtl">
+                    <span className="text-base">👩‍🏫</span> ملف المعلم
                   </button>
                   {years.flatMap(y => y.classes).map(cls => (
                     <button
@@ -121,15 +121,15 @@ export default function Dashboard() {
         {!isLoading && years.length === 0 && (
           <div className="text-center py-24 text-gray-400">
             <div className="text-5xl mb-4">📄</div>
-            <p className="text-lg font-medium text-gray-500">Aucune classe pour l'instant</p>
-            <p className="text-sm mt-1">Importez le PDF exporté depuis le site pour commencer.</p>
+            <p className="arabic text-lg font-medium text-gray-500">لا توجد أقسام حالياً</p>
+            <p className="arabic text-sm mt-1">استوردوا ملف PDF المُصدَّر من الموقع للبدء.</p>
           </div>
         )}
 
         {years.map(year => (
           <section key={year.label} className="mb-10">
-            <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
-              Année scolaire {year.label}
+            <h2 className="arabic text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+              السنة الدراسية {year.label}
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {year.classes.map(cls => (
@@ -171,12 +171,12 @@ function ClassCard({ cls, dismissed, onDismiss, onClick }: {
     <div className="bg-white border border-gray-200 hover:border-blue-400 hover:shadow-md rounded-xl overflow-hidden transition group">
       {/* Warning banners */}
       {warnings.map(t => (
-        <div key={t} className="flex items-center justify-between bg-amber-50 border-b border-amber-200 px-3 py-1.5 text-xs text-amber-700">
-          <span>⚠ T{t} : امتحان sans تقييم</span>
+        <div key={t} className="flex items-center justify-between bg-amber-50 border-b border-amber-200 px-3 py-1.5 text-xs text-amber-700" dir="rtl">
+          <span className="arabic">⚠ الثلاثي {t} : امتحان بدون تقييم</span>
           <button
             onClick={e => { e.stopPropagation(); onDismiss(`${cls.id}-${t}`) }}
-            className="text-amber-500 hover:text-amber-700 ml-2 font-bold"
-            title="Ignorer"
+            className="text-amber-500 hover:text-amber-700 mr-2 font-bold"
+            title="تجاهل"
           >✕</button>
         </div>
       ))}
@@ -203,14 +203,14 @@ function ClassCard({ cls, dismissed, onDismiss, onClick }: {
               </div>
             )
           })}
-          <span className="ml-auto text-xs text-gray-400">
-            {Object.values(cls.trimester_status).filter(s => s.imtihan_finalized).length}/3 finalisés
+          <span className="arabic ml-auto text-xs text-gray-400">
+            {Object.values(cls.trimester_status).filter(s => s.imtihan_finalized).length}/3 مكتمل
           </span>
         </div>
 
         <div className="flex gap-4 text-xs text-gray-400">
-          <span>{cls.student_count} élèves</span>
-          <span>{cls.session_count} session{cls.session_count !== 1 ? 's' : ''}</span>
+          <span className="arabic">{cls.student_count} تلميذ</span>
+          <span className="arabic">{cls.session_count} جلسة</span>
         </div>
       </button>
     </div>
