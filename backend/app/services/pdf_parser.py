@@ -43,7 +43,17 @@ def parse_pdf(pdf_bytes: bytes) -> Dict:
         full_text = ""
         for page in pdf.pages:
             page_text = page.extract_text() or ""
-            full_text += page_text + "\n"
+            # Normalize visual-order Arabic lines so regex patterns work.
+            # Lines with Arabic presentation forms (U+FB50-U+FEFF) are reversed+NFKC.
+            # Digit-only / Latin lines are left as-is (preserves year "2025-2026").
+            HAS_PRES = re.compile(r"[ﭐ-﷿ﹰ-﻿]")
+            normalized_lines = []
+            for line in page_text.split("\n"):
+                if HAS_PRES.search(line):
+                    normalized_lines.append(_fix_arabic_name(line))
+                else:
+                    normalized_lines.append(line)
+            full_text += "\n".join(normalized_lines) + "\n"
 
             for table in page.extract_tables():
                 for row in table:
