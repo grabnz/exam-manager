@@ -1,14 +1,35 @@
 import { useState, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { api, YearGroup } from '../api/client'
+import { api, YearGroup, ClassSummary, TrimesterStatus } from '../api/client'
 
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const TRIMESTERS = [1, 2, 3]
+
+function trimesterDot(ts: TrimesterStatus | undefined, t: number) {
+  if (!ts) return { color: 'bg-gray-200', label: `T${t}` }
+  if (ts.imtihan_finalized) return { color: 'bg-green-500', label: `T${t}` }
+  if (ts.imtihan_exists)    return { color: 'bg-amber-400', label: `T${t}` }
+  if (ts.has_taqyim)        return { color: 'bg-blue-400',  label: `T${t}` }
+  return { color: 'bg-gray-200', label: `T${t}` }
+}
+
+// Returns true if امتحان exists for this trimester but no تقييم was ever added
+function hasImtihanWithoutTaqyim(status: TrimesterStatus) {
+  return status.imtihan_exists && !status.has_taqyim
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const navigate     = useNavigate()
-  const qc           = useQueryClient()
-  const fileRef      = useRef<HTMLInputElement>(null)
-  const [uploading, setUploading] = useState(false)
-  const [error,     setError]     = useState('')
+  const navigate    = useNavigate()
+  const qc          = useQueryClient()
+  const fileRef     = useRef<HTMLInputElement>(null)
+
+  const [uploading,  setUploading]  = useState(false)
+  const [error,      setError]      = useState('')
+  const [menuOpen,   setMenuOpen]   = useState(false)
+  // Dismissed "no taqyim" warnings per class-trimester key
+  const [dismissed,  setDismissed]  = useState<Set<string>>(new Set())
 
   const { data: years = [], isLoading } = useQuery<YearGroup[]>({
     queryKey: ['classes'],
@@ -23,11 +44,8 @@ export default function Dashboard() {
     try {
       const res = await api.classes.upload(file)
       await qc.invalidateQueries({ queryKey: ['classes'] })
-      if (res.session_id) {
-        navigate(`/sessions/${res.session_id}`)
-      } else {
-        navigate(`/classes/${res.id}`)
-      }
+      if (res.session_id) navigate(`/sessions/${res.session_id}`)
+      else                navigate(`/classes/${res.id}`)
     } catch (err: any) {
       setError(err.message || 'Upload failed')
     } finally {
@@ -38,45 +56,67 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Top bar */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900">Gestion des Notes</h1>
-          <p className="text-sm text-gray-500">Français — École primaire</p>
+      {/* ── Top bar ── */}
+      <header className="bg-white border-b border-gray-200 px-4 md:px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">Gestion des Notes</h1>
+            <p className="text-sm text-gray-500">Français — École primaire</p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* Upload */}
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={uploading}
+              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-3 md:px-4 py-2 rounded-lg text-sm font-medium transition"
+            >
+              {uploading ? <><Spinner /> <span className="hidden md:inline">Import…</span></> : <><UploadIcon /> <span className="hidden md:inline">Importer PDF</span></>}
+            </button>
+
+            {/* Hamburger / nav menu */}
+            <div className="relative">
+              <button
+                onClick={() => setMenuOpen(v => !v)}
+                className="w-9 h-9 flex items-center justify-center border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600 text-lg"
+              >
+                ☰
+              </button>
+              {menuOpen && (
+                <div className="absolute right-0 mt-1 w-52 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
+                  <button onClick={() => { setMenuOpen(false); navigate('/profile') }}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 text-left border-b border-gray-100">
+                    <span className="text-base">👩‍🏫</span> Profil enseignant
+                  </button>
+                  {years.flatMap(y => y.classes).map(cls => (
+                    <button
+                      key={cls.id}
+                      onClick={() => { setMenuOpen(false); navigate(`/classes/${cls.id}`) }}
+                      className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 text-left"
+                    >
+                      <span className="arabic truncate flex-1">{cls.name}</span>
+                      <span className="flex gap-1 ml-2">
+                        {TRIMESTERS.map(t => {
+                          const ts = cls.trimester_status[t]
+                          const dot = trimesterDot(ts, t)
+                          return <span key={t} className={`w-2 h-2 rounded-full ${dot.color}`} title={dot.label} />
+                        })}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-        <button
-          onClick={() => navigate('/profile')}
-          className="flex items-center gap-1.5 border border-gray-200 hover:border-gray-300 px-3 py-2 rounded-lg text-sm text-gray-600 transition"
-          title="Profil enseignant"
-        >
-          👩‍🏫
-        </button>
-        <button
-          onClick={() => fileRef.current?.click()}
-          disabled={uploading}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
-        >
-          {uploading ? (
-            <><Spinner /> Import PDF en cours…</>
-          ) : (
-            <><UploadIcon /> Importer un PDF</>
-          )}
-        </button>
-        </div>
-        <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={handleFile} />
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 md:px-6 py-6 md:py-8">
+      <main className="max-w-5xl mx-auto px-4 md:px-6 py-6">
         {error && (
-          <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-            {error}
-          </div>
+          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>
         )}
 
-        {isLoading && (
-          <div className="flex justify-center py-20"><Spinner large /></div>
-        )}
+        {isLoading && <div className="flex justify-center py-20"><Spinner large /></div>}
 
         {!isLoading && years.length === 0 && (
           <div className="text-center py-24 text-gray-400">
@@ -93,38 +133,91 @@ export default function Dashboard() {
             </h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
               {year.classes.map(cls => (
-                <button
+                <ClassCard
                   key={cls.id}
+                  cls={cls}
+                  dismissed={dismissed}
+                  onDismiss={key => setDismissed(prev => new Set([...prev, key]))}
                   onClick={() => navigate(`/classes/${cls.id}`)}
-                  className="bg-white border border-gray-200 hover:border-blue-400 hover:shadow-md rounded-xl p-5 text-left transition group"
-                >
-                  <div className="flex items-start justify-between mb-3">
-                    <span className="arabic text-lg font-bold text-gray-900 group-hover:text-blue-700">
-                      {cls.name}
-                    </span>
-                    {cls.has_scores && (
-                      <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
-                        Notes saisies
-                      </span>
-                    )}
-                  </div>
-                  {cls.teacher && (
-                    <p className="arabic text-sm text-gray-500 mb-3">{cls.teacher}</p>
-                  )}
-                  <div className="flex gap-4 text-xs text-gray-400">
-                    <span>{cls.student_count} élèves</span>
-                    <span>{cls.session_count} session{cls.session_count !== 1 ? 's' : ''}</span>
-                  </div>
-                </button>
+                />
               ))}
             </div>
           </section>
         ))}
       </main>
+
+      <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={handleFile} />
+
+      {/* Close menu on outside click */}
+      {menuOpen && <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />}
     </div>
   )
 }
 
+// ── Class card ─────────────────────────────────────────────────────────────────
+function ClassCard({ cls, dismissed, onDismiss, onClick }: {
+  cls: ClassSummary
+  dismissed: Set<string>
+  onDismiss: (key: string) => void
+  onClick: () => void
+}) {
+  // Warnings: امتحان exists but no تقييم for this trimester
+  const warnings = TRIMESTERS.filter(t => {
+    const ts = cls.trimester_status[t]
+    return ts && hasImtihanWithoutTaqyim(ts) && !dismissed.has(`${cls.id}-${t}`)
+  })
+
+  return (
+    <div className="bg-white border border-gray-200 hover:border-blue-400 hover:shadow-md rounded-xl overflow-hidden transition group">
+      {/* Warning banners */}
+      {warnings.map(t => (
+        <div key={t} className="flex items-center justify-between bg-amber-50 border-b border-amber-200 px-3 py-1.5 text-xs text-amber-700">
+          <span>⚠ T{t} : امتحان sans تقييم</span>
+          <button
+            onClick={e => { e.stopPropagation(); onDismiss(`${cls.id}-${t}`) }}
+            className="text-amber-500 hover:text-amber-700 ml-2 font-bold"
+            title="Ignorer"
+          >✕</button>
+        </div>
+      ))}
+
+      {/* Card body */}
+      <button className="w-full text-left p-5" onClick={onClick}>
+        <div className="flex items-start justify-between mb-3">
+          <span className="arabic text-lg font-bold text-gray-900 group-hover:text-blue-700">
+            {cls.name}
+          </span>
+        </div>
+
+        {cls.teacher && <p className="arabic text-sm text-gray-500 mb-3">{cls.teacher}</p>}
+
+        {/* Trimester progress dots */}
+        <div className="flex items-center gap-3 mb-3">
+          {TRIMESTERS.map(t => {
+            const ts  = cls.trimester_status[t]
+            const dot = trimesterDot(ts, t)
+            return (
+              <div key={t} className="flex items-center gap-1.5">
+                <div className={`w-2.5 h-2.5 rounded-full ${dot.color}`} />
+                <span className="text-xs text-gray-500">T{t}</span>
+              </div>
+            )
+          })}
+          <span className="ml-auto text-xs text-gray-400">
+            {Object.values(cls.trimester_status).filter(s => s.imtihan_finalized).length}/3 finalisés
+          </span>
+        </div>
+
+        <div className="flex gap-4 text-xs text-gray-400">
+          <span>{cls.student_count} élèves</span>
+          <span>{cls.session_count} session{cls.session_count !== 1 ? 's' : ''}</span>
+        </div>
+      </button>
+    </div>
+  )
+}
+
+// ── Icons ──────────────────────────────────────────────────────────────────────
 function UploadIcon() {
   return (
     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -132,14 +225,11 @@ function UploadIcon() {
     </svg>
   )
 }
-
 function Spinner({ large = false }: { large?: boolean }) {
   return (
-    <svg className={`animate-spin ${large ? 'w-8 h-8 text-blue-500' : 'w-4 h-4'}`}
-         fill="none" viewBox="0 0 24 24">
+    <svg className={`animate-spin ${large ? 'w-8 h-8 text-blue-500' : 'w-4 h-4'}`} fill="none" viewBox="0 0 24 24">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-      <path  className="opacity-75" fill="currentColor"
-             d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
     </svg>
   )
 }

@@ -73,13 +73,27 @@ def list_classes(db: Session = Depends(get_db)):
                 .filter(ExamSession.class_id == c.id)
                 .count()
             )
+            # Trimester progress: for each trimester, is the امتحان finalized?
+            trimester_status = {}
+            for s in c.sessions:
+                t = s.trimester
+                if t not in trimester_status:
+                    trimester_status[t] = {"has_taqyim": False, "imtihan_finalized": False, "imtihan_exists": False}
+                if s.exam_type == "امتحان":
+                    trimester_status[t]["imtihan_exists"] = True
+                    if s.is_finalized:
+                        trimester_status[t]["imtihan_finalized"] = True
+                elif s.exam_type.startswith("تقييم"):
+                    trimester_status[t]["has_taqyim"] = True
+
             classes.append({
-                "id":            c.id,
-                "name":          c.name,
-                "teacher":       c.teacher,
-                "student_count": len(c.students),
-                "session_count": len(c.sessions),
-                "has_scores":    score_count > 0,
+                "id":               c.id,
+                "name":             c.name,
+                "teacher":          c.teacher,
+                "student_count":    len(c.students),
+                "session_count":    len(c.sessions),
+                "has_scores":       score_count > 0,
+                "trimester_status": trimester_status,  # {1: {has_taqyim, imtihan_finalized, imtihan_exists}, ...}
             })
         result.append({"label": year.label, "classes": classes})
     return result

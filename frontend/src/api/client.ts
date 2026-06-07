@@ -11,9 +11,15 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
+export interface TrimesterStatus {
+  has_taqyim: boolean
+  imtihan_exists: boolean
+  imtihan_finalized: boolean
+}
 export interface ClassSummary {
   id: string; name: string; teacher?: string
   student_count: number; session_count: number; has_scores: boolean
+  trimester_status: Record<string, TrimesterStatus>
 }
 export interface YearGroup { label: string; classes: ClassSummary[] }
 
