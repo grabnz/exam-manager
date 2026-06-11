@@ -1,61 +1,25 @@
 import os
-from sqlalchemy import inspect as sa_inspect, text
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .database import engine, Base, SessionLocal
-from .routers import classes, sessions, scores, profile, auth as auth_router, users
+from .routers import (
+    classes, sessions, scores, profile, users,
+    auth as auth_router, subjects, templates,
+)
 from .auth import hash_password
+from . import migrations
 
 # ── Create new tables (idempotent) ───────────────────────────────────────────
 Base.metadata.create_all(bind=engine)
 
-# ── Auto-migrate: add any missing columns to existing tables ─────────────────
-def _ensure_columns():
-    """Add columns that may be missing due to schema evolution.
-    SQLAlchemy create_all() only creates new tables, not new columns.
-    This runs safely on every cold start.
-    """
-    inspector = sa_inspect(engine)
-    with engine.connect() as conn:
-
-        def has_col(table: str, col: str) -> bool:
-            return any(c["name"] == col for c in inspector.get_columns(table))
-
-        def add_col(table: str, col: str, definition: str):
-            if not has_col(table, col):
-                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {definition}"))
-
-        # exam_sessions
-        add_col("exam_sessions", "is_finalized", "BOOLEAN DEFAULT FALSE NOT NULL")
-
-        # classes — multi-teacher ownership
-        add_col("classes", "owner_id", "VARCHAR")
-
-        # users — taught subject
-        add_col("users", "subject", "VARCHAR")
-
-        # student_scores — bonus fields
-        for col in ["prod_ecriture_bonus", "prod_production_bonus",
-                    "lect_vocale_bonus", "lect_comp_bonus",
-                    "com_rec_bonus", "com_oral_bonus"]:
-            add_col("student_scores", col, "FLOAT")
-
-        # student_scores — direct subtotal overrides
-        for col in ["prod_ecriture_st", "prod_production_st",
-                    "lect_vocale_st", "lect_comp_st",
-                    "com_rec_st", "com_oral_st"]:
-            add_col("student_scores", col, "FLOAT")
-
-        conn.commit()
-
 
 def _bootstrap_admin():
-    """Create the initial admin account if no users exist.
+    """Create the initial admin (director) account if no users exist.
     Credentials come from ADMIN_USERNAME / ADMIN_PASSWORD env vars
     (defaults: admin / admin123 — forced to change password on first login).
-    Legacy classes (no owner) stay unowned: the admin sees them and assigns
+    Legacy classes (no owner) stay unowned: the director sees them and assigns
     them to the right teacher from the admin page.
 
     Recovery: if ADMIN_FORCE_RESET=1, the admin's password is reset from
@@ -93,9 +57,14 @@ def _bootstrap_admin():
 
 
 try:
-    _ensure_columns()
+    migrations.ensure_columns()
 except Exception as e:
     print(f"[startup] column migration failed: {e!r}")  # visible in serverless logs
+
+try:
+    migrations.run_data_migrations()
+except Exception as e:
+    print(f"[startup] data migrations failed: {e!r}")
 
 try:
     _bootstrap_admin()
@@ -103,7 +72,7 @@ except Exception as e:
     print(f"[startup] admin bootstrap failed: {e!r}")
 
 
-app = FastAPI(title="Exam Score Manager", version="1.0.0")
+app = FastAPI(title="Exam Score Manager", version="2.0.0")
 
 _raw = os.getenv("ALLOWED_ORIGINS") or "*"
 origins = [o.strip() for o in _raw.split(",")] if _raw != "*" else ["*"]
@@ -118,6 +87,8 @@ app.add_middleware(
 
 app.include_router(auth_router.router)
 app.include_router(users.router)
+app.include_router(subjects.router)
+app.include_router(templates.router)
 app.include_router(classes.router)
 app.include_router(classes.students_router)
 app.include_router(sessions.router)

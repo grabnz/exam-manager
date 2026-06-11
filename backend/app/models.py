@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, Float, Boolean, ForeignKey, DateTime, UniqueConstraint
+from sqlalchemy import Column, String, Integer, Float, Boolean, ForeignKey, DateTime, UniqueConstraint, JSON
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -22,6 +22,115 @@ class User(Base):
     must_change_password = Column(Boolean, nullable=False, default=True)
     created_at           = Column(DateTime, default=datetime.utcnow)
     classes              = relationship("Class", back_populates="owner")
+    assignments          = relationship("TeacherAssignment", back_populates="teacher",
+                                        cascade="all, delete-orphan")
+
+
+class SchemaMigration(Base):
+    """One-shot data migrations applied exactly once (no Alembic)."""
+    __tablename__ = "schema_migrations"
+    key        = Column(String, primary_key=True)
+    applied_at = Column(DateTime, default=datetime.utcnow)
+
+
+class SchoolSettings(Base):
+    __tablename__ = "school_settings"
+    id          = Column(Integer, primary_key=True, default=1)
+    school_name = Column(String, default="")   # المدرسة الابتدائية …
+    active_year = Column(String, default="")   # "2025-2026"
+    region      = Column(String, default="")   # المندوبية الجهوية
+
+
+class Subject(Base):
+    __tablename__ = "subjects"
+    id          = Column(String, primary_key=True, default=_id)
+    code        = Column(String, nullable=False, unique=True)  # 'arabe','math','francais',…
+    name_ar     = Column(String, nullable=False)               # "اللغة العربية"
+    name_fr     = Column(String)                               # "Français" (LTR grids)
+    order_index = Column(Integer, default=0)
+    is_active   = Column(Boolean, nullable=False, default=True)
+    templates   = relationship("GridTemplate", back_populates="subject")
+
+
+class GridTemplate(Base):
+    """A score-grid definition (شبكة تقييم) for one subject.
+    Built-ins are immutable; directors clone them to customize.
+    Sessions pin a template_id so history never changes."""
+    __tablename__ = "grid_templates"
+    id            = Column(String, primary_key=True, default=_id)
+    code          = Column(String, unique=True)  # stable key for built-ins, NULL for clones
+    subject_id    = Column(String, ForeignKey("subjects.id"), nullable=False)
+    name          = Column(String, nullable=False)
+    final_formula = Column(String, nullable=False, default="avg_groups")  # avg_groups|sum_sections|sum_capped
+    final_cap     = Column(Float)                # used by sum_capped (e.g. 20)
+    is_builtin    = Column(Boolean, nullable=False, default=False)
+    is_active     = Column(Boolean, nullable=False, default=True)
+    direction     = Column(String, nullable=False, default="rtl")  # grid text direction
+    created_at    = Column(DateTime, default=datetime.utcnow)
+    subject       = relationship("Subject", back_populates="templates")
+    sections      = relationship("GridSection", back_populates="template",
+                                 cascade="all, delete-orphan",
+                                 order_by="GridSection.order_index")
+
+
+class GridSection(Base):
+    __tablename__ = "grid_sections"
+    id                = Column(String, primary_key=True, default=_id)
+    template_id       = Column(String, ForeignKey("grid_templates.id"), nullable=False)
+    code              = Column(String)             # migration key for built-ins ('prod_ecriture',…)
+    group_key         = Column(String, nullable=False)   # tab/sheet grouping
+    group_label       = Column(String, nullable=False)
+    label             = Column(String, nullable=False)   # "Dictée" / "القراءة"
+    order_index       = Column(Integer, nullable=False, default=0)
+    has_bonus         = Column(Boolean, nullable=False, default=True)
+    allow_st_override = Column(Boolean, nullable=False, default=True)
+    color_key         = Column(String)             # palette key: 'blue'|'green'|'orange'|…
+    template          = relationship("GridTemplate", back_populates="sections")
+    criteria          = relationship("GridCriterion", back_populates="section",
+                                     cascade="all, delete-orphan",
+                                     order_by="GridCriterion.order_index")
+
+
+class GridCriterion(Base):
+    __tablename__ = "grid_criteria"
+    id          = Column(String, primary_key=True, default=_id)
+    section_id  = Column(String, ForeignKey("grid_sections.id"), nullable=False)
+    code        = Column(String)        # migration key for built-ins ('prod_dictee_c4',…)
+    label       = Column(String, nullable=False)   # "C4" / "مع1"
+    max_score   = Column(Float)
+    order_index = Column(Integer, nullable=False, default=0)
+    section     = relationship("GridSection", back_populates="criteria")
+
+
+class TeacherAssignment(Base):
+    """A teacher teaches a subject in a class. Source of truth for access."""
+    __tablename__ = "teacher_assignments"
+    id         = Column(String, primary_key=True, default=_id)
+    teacher_id = Column(String, ForeignKey("users.id"), nullable=False)
+    class_id   = Column(String, ForeignKey("classes.id"), nullable=False)
+    subject_id = Column(String, ForeignKey("subjects.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    teacher    = relationship("User", back_populates="assignments")
+    class_     = relationship("Class", back_populates="assignments")
+    subject    = relationship("Subject")
+    __table_args__ = (UniqueConstraint("teacher_id", "class_id", "subject_id"),)
+
+
+class ScoreEntry(Base):
+    """Generic per-student scores for a session (replaces student_scores).
+    values = {"criteria": {criterion_id: number|null},
+              "sections": {section_id: {"bonus": number|null, "st": number|null}}}"""
+    __tablename__ = "score_entries"
+    id          = Column(String, primary_key=True, default=_id)
+    session_id  = Column(String, ForeignKey("exam_sessions.id"), nullable=False)
+    student_id  = Column(String, ForeignKey("students.id"), nullable=False)
+    values      = Column(JSON, nullable=False, default=dict)
+    final_score = Column(Float)        # denormalized, recomputed server-side on save
+    updated_at  = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_by  = Column(String, ForeignKey("users.id"))
+    session     = relationship("ExamSession", back_populates="entries")
+    student     = relationship("Student", back_populates="entries")
+    __table_args__ = (UniqueConstraint("session_id", "student_id"),)
 
 
 class SchoolYear(Base):
@@ -37,9 +146,10 @@ class Class(Base):
     __tablename__ = "classes"
     id             = Column(String, primary_key=True, default=_id)
     school_year_id = Column(String, ForeignKey("school_years.id"), nullable=False)
-    owner_id       = Column(String, ForeignKey("users.id"), nullable=True)  # NULL = legacy/unassigned
+    owner_id       = Column(String, ForeignKey("users.id"), nullable=True)  # legacy (pre-assignments)
     name           = Column(String, nullable=False)
-    teacher        = Column(String)
+    teacher        = Column(String)   # legacy free-text from PDF import
+    level          = Column(String)   # السنة الأولى…السادسة (optional)
     created_at     = Column(DateTime, default=datetime.utcnow)
     school_year    = relationship("SchoolYear", back_populates="classes")
     owner          = relationship("User", back_populates="classes")
@@ -47,6 +157,8 @@ class Class(Base):
                                   order_by="Student.order_index",
                                   cascade="all, delete-orphan")
     sessions       = relationship("ExamSession", back_populates="class_",
+                                  cascade="all, delete-orphan")
+    assignments    = relationship("TeacherAssignment", back_populates="class_",
                                   cascade="all, delete-orphan")
 
 
@@ -59,20 +171,28 @@ class Student(Base):
     class_      = relationship("Class", back_populates="students")
     scores      = relationship("StudentScore", back_populates="student",
                                cascade="all, delete-orphan")
+    entries     = relationship("ScoreEntry", back_populates="student",
+                               cascade="all, delete-orphan")
 
 
 class ExamSession(Base):
     __tablename__ = "exam_sessions"
     id           = Column(String, primary_key=True, default=_id)
     class_id     = Column(String, ForeignKey("classes.id"), nullable=False)
+    subject_id   = Column(String, ForeignKey("subjects.id"))      # backfilled; required in app logic
+    template_id  = Column(String, ForeignKey("grid_templates.id"))  # pinned grid for this session
     trimester    = Column(Integer, nullable=False)
     exam_type    = Column(String, nullable=False)
     is_finalized = Column(Boolean, default=False, nullable=False)
     created_at   = Column(DateTime, default=datetime.utcnow)
     class_       = relationship("Class", back_populates="sessions")
+    subject      = relationship("Subject")
+    template     = relationship("GridTemplate")
     scores       = relationship("StudentScore", back_populates="session",
                                 cascade="all, delete-orphan")
-    __table_args__ = (UniqueConstraint("class_id", "trimester", "exam_type"),)
+    entries      = relationship("ScoreEntry", back_populates="session",
+                                cascade="all, delete-orphan")
+    __table_args__ = (UniqueConstraint("class_id", "subject_id", "trimester", "exam_type"),)
 
 
 class TeacherProfile(Base):

@@ -53,6 +53,11 @@ VITE_API_URL=http://localhost:8000 npm run dev
 
 First login: `admin` / `admin123` (you will be asked to change it).
 
+> Note (multi-subject upgrade): if you have an old local `exam_manager.db`,
+> delete it once — the `exam_sessions` uniqueness changed to
+> (class, subject, trimester, exam_type) and SQLite cannot alter constraints.
+> Production Postgres is migrated automatically on startup.
+
 ## Production deployment checklist
 
 1. Set `SECRET_KEY`, `ADMIN_PASSWORD`, `ALLOWED_ORIGINS`, `DATABASE_URL` in the
