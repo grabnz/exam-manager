@@ -1,6 +1,9 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, Integer, Float, Boolean, ForeignKey, DateTime, UniqueConstraint, JSON
+from sqlalchemy import (
+    Column, String, Integer, Float, Boolean, ForeignKey, DateTime,
+    UniqueConstraint, JSON, LargeBinary,
+)
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -131,6 +134,37 @@ class ScoreEntry(Base):
     session     = relationship("ExamSession", back_populates="entries")
     student     = relationship("Student", back_populates="entries")
     __table_args__ = (UniqueConstraint("session_id", "student_id"),)
+
+
+class CalendarEvent(Base):
+    """Agenda entry. Personal (visible to its creator) or school-wide
+    (created by the director, visible to everyone)."""
+    __tablename__ = "calendar_events"
+    id             = Column(String, primary_key=True, default=_id)
+    user_id        = Column(String, ForeignKey("users.id"), nullable=False)  # creator
+    title          = Column(String, nullable=False)
+    date           = Column(String, nullable=False, index=True)  # 'YYYY-MM-DD'
+    time           = Column(String)                              # 'HH:MM' optional
+    note           = Column(String, default="")
+    color          = Column(String, default="blue")              # blue|green|amber|rose|purple
+    is_school_wide = Column(Boolean, nullable=False, default=False)
+    created_at     = Column(DateTime, default=datetime.utcnow)
+    user           = relationship("User")
+
+
+class OfficialDocument(Base):
+    """Official documents uploaded by the director, downloadable by teachers
+    (stored in the database — no filesystem on serverless)."""
+    __tablename__ = "official_documents"
+    id           = Column(String, primary_key=True, default=_id)
+    title        = Column(String, nullable=False)
+    filename     = Column(String, nullable=False)
+    content_type = Column(String, default="application/octet-stream")
+    size         = Column(Integer, default=0)
+    data         = Column(LargeBinary, nullable=False)
+    uploaded_by  = Column(String, ForeignKey("users.id"))
+    created_at   = Column(DateTime, default=datetime.utcnow)
+    uploader     = relationship("User")
 
 
 class SchoolYear(Base):

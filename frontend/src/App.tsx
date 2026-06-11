@@ -11,6 +11,8 @@ import Assignments from './pages/admin/Assignments'
 import Templates from './pages/admin/Templates'
 import Settings from './pages/admin/Settings'
 import Dashboard from './pages/Dashboard'
+import Calendar from './pages/Calendar'
+import Documents from './pages/Documents'
 import ClassDetail from './pages/ClassDetail'
 import ScoreEntry from './pages/ScoreEntry'
 import PrintFinale from './pages/PrintFinale'
@@ -33,6 +35,8 @@ export default function App() {
             <Route path="settings"        element={<Settings />} />
           </Route>
           <Route path="/"                 element={<RequireAuth><Dashboard /></RequireAuth>} />
+          <Route path="/calendar"         element={<RequireAuth><Calendar /></RequireAuth>} />
+          <Route path="/documents"        element={<RequireAuth><Documents /></RequireAuth>} />
           <Route path="/classes/:id"      element={<RequireAuth><ClassDetail /></RequireAuth>} />
           <Route path="/sessions/:id"     element={<RequireAuth><ScoreEntry /></RequireAuth>} />
           <Route path="/sessions/:id/print" element={<RequireAuth><PrintFinale /></RequireAuth>} />

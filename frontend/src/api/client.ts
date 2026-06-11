@@ -107,6 +107,46 @@ export interface AssignmentRow {
 }
 export interface SettingsData { school_name: string; active_year: string; region: string }
 
+// ── Calendar & documents ─────────────────────────────────────────────────────
+export interface CalendarEvent {
+  id: string; title: string; date: string; time: string | null
+  note: string; color: string; is_school_wide: boolean; is_mine: boolean
+  by: string | null
+}
+export interface DocumentRow {
+  id: string; title: string; filename: string; content_type: string
+  size: number; by: string | null; created_at: string | null
+}
+
+// ── Dashboard stats ──────────────────────────────────────────────────────────
+export interface PairStats {
+  class_id: string; class_name: string; level?: string | null; school_year: string
+  subject_id: string; subject_code: string; subject_name: string
+  student_count: number; session_count: number
+  trimester_status: Record<string, TrimesterStatus>
+  finalized_trimesters: number
+  avg_final: number | null
+  last_session: { id: string; trimester: number; exam_type: string } | null
+}
+export interface TeacherStats {
+  role: 'teacher'
+  totals: { classes: number; subjects: number; students: number; completion_pct: number }
+  cards: PairStats[]
+}
+export interface DirectorStats {
+  role: 'director'
+  totals: { teachers: number; classes: number; students: number; sessions: number; completion_pct: number }
+  alerts: { unassigned_classes: { id: string; name: string }[] }
+  subject_averages: { subject_name: string; avg: number | null }[]
+  activity: {
+    session_id: string; class_name: string; subject_name: string
+    exam_type: string; trimester: number; is_finalized: boolean
+    by: string | null; at: string
+  }[]
+  pairs: PairStats[]
+}
+export type DashboardStats = TeacherStats | DirectorStats
+
 export interface TeacherProfile { name: string; grade: string; subject: string }
 export interface ClassDetail {
   id: string; name: string; level?: string | null; teacher?: string; school_year: string
@@ -221,6 +261,42 @@ export const api = {
         body: JSON.stringify({ teacher_id: teacherId, class_id: classId, subject_ids: subjectIds }),
       }),
     delete: (id: string) => req<{ ok: boolean }>(`/assignments/${id}`, { method: 'DELETE' }),
+  },
+  stats: {
+    get: () => req<DashboardStats>('/stats'),
+  },
+  events: {
+    list: (start: string, end: string) =>
+      req<CalendarEvent[]>(`/events?start=${start}&end=${end}`),
+    create: (data: { title: string; date: string; time?: string | null; note?: string; color?: string; is_school_wide?: boolean }) =>
+      req<CalendarEvent>('/events', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) => req<{ ok: boolean }>(`/events/${id}`, { method: 'DELETE' }),
+  },
+  documents: {
+    list: () => req<DocumentRow[]>('/documents'),
+    upload: (file: File, title: string) => {
+      const fd = new FormData()
+      fd.append('file', file)
+      fd.append('title', title)
+      return req<DocumentRow>('/documents', { method: 'POST', body: fd })
+    },
+    delete: (id: string) => req<{ ok: boolean }>(`/documents/${id}`, { method: 'DELETE' }),
+    download: async (id: string, filename: string): Promise<string | null> => {
+      const res = await fetch(`${BASE}/documents/${id}/download`, { headers: authHeaders() })
+      if (!res.ok) return `Erreur ${res.status}`
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+      return null
+    },
   },
   settings: {
     get: () => req<SettingsData>('/settings'),
