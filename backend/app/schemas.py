@@ -70,8 +70,9 @@ class FinalizeBody(BaseModel):
 
 
 class ProfileUpdate(BaseModel):
-    name:  str
-    grade: str
+    name:    str
+    grade:   str
+    subject: str = ""
 
 
 # ── Auth / users ─────────────────────────────────────────────────────────────

@@ -51,7 +51,7 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export interface AuthUser {
-  id: string; username: string; full_name: string; grade: string
+  id: string; username: string; full_name: string; grade: string; subject: string
   role: 'admin' | 'teacher'
   must_change_password: boolean
 }
@@ -80,7 +80,7 @@ export interface SessionSummary {
   has_scores: boolean; is_finalized: boolean
 }
 
-export interface TeacherProfile { name: string; grade: string }
+export interface TeacherProfile { name: string; grade: string; subject: string }
 export interface ClassDetail {
   id: string; name: string; teacher?: string; school_year: string
   students: Student[]; sessions: SessionSummary[]

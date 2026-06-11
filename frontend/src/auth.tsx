@@ -1,6 +1,6 @@
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
-import { AuthUser, getToken, getStoredUser, storeAuth, storeUser, clearAuth } from './api/client'
+import { api, AuthUser, getToken, getStoredUser, storeAuth, storeUser, clearAuth } from './api/client'
 
 interface AuthState {
   user: AuthUser | null
@@ -20,6 +20,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(() =>
     getToken() ? getStoredUser() : null
   )
+
+  // Sync the stored user with the server (name/subject/role may have changed)
+  useEffect(() => {
+    if (getToken()) {
+      api.auth.me().then(u => { storeUser(u); setUser(u) }).catch(() => {})
+    }
+  }, [])
 
   const login = (token: string, u: AuthUser) => {
     storeAuth(token, u)

@@ -33,6 +33,9 @@ def _ensure_columns():
         # classes — multi-teacher ownership
         add_col("classes", "owner_id", "VARCHAR")
 
+        # users — taught subject
+        add_col("users", "subject", "VARCHAR")
+
         # student_scores — bonus fields
         for col in ["prod_ecriture_bonus", "prod_production_bonus",
                     "lect_vocale_bonus", "lect_comp_bonus",

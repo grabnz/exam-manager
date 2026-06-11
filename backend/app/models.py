@@ -16,6 +16,7 @@ class User(Base):
     password_hash        = Column(String, nullable=False)
     full_name            = Column(String, default="")
     grade                = Column(String, default="")  # رتبة
+    subject              = Column(String, default="")  # المادة (فرنسية، رياضيات…)
     role                 = Column(String, nullable=False, default="teacher")  # admin | teacher
     is_active            = Column(Boolean, nullable=False, default=True)
     must_change_password = Column(Boolean, nullable=False, default=True)

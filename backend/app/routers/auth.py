@@ -17,6 +17,7 @@ def _user_out(u: User) -> dict:
         "username":             u.username,
         "full_name":            u.full_name,
         "grade":                u.grade,
+        "subject":              u.subject or "",
         "role":                 u.role,
         "must_change_password": u.must_change_password,
     }

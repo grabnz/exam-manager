@@ -10,7 +10,11 @@ router = APIRouter(prefix="/api/profile", tags=["profile"])
 
 @router.get("")
 def get_profile(user: User = Depends(get_current_user)):
-    return {"name": user.full_name or "", "grade": user.grade or ""}
+    return {
+        "name":    user.full_name or "",
+        "grade":   user.grade or "",
+        "subject": user.subject or "",
+    }
 
 
 @router.put("")
@@ -21,5 +25,6 @@ def update_profile(
 ):
     user.full_name = body.name
     user.grade = body.grade
+    user.subject = body.subject
     db.commit()
-    return {"name": user.full_name, "grade": user.grade}
+    return {"name": user.full_name, "grade": user.grade, "subject": user.subject}

@@ -72,8 +72,8 @@ export default function Dashboard() {
           <div>
             <h1 className="text-xl font-bold text-gray-900">إدارة النقاط</h1>
             <p className="arabic text-sm text-gray-500">
-              اللغة الفرنسية — المرحلة الابتدائية
-              {user?.full_name && <span className="text-gray-400"> · {user.full_name}</span>}
+              {[user?.subject, 'المرحلة الابتدائية'].filter(Boolean).join(' — ')}
+              {user?.full_name && <span className="text-gray-700 font-medium"> · {user.full_name}</span>}
             </p>
           </div>
 
