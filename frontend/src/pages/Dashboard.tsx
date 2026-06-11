@@ -2,9 +2,17 @@ import { useState, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { api, YearGroup, ClassSummary, TrimesterStatus } from '../api/client'
+import { useAuth } from '../auth'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const TRIMESTERS = [1, 2, 3]
+
+// Tunisian school year runs September → June
+function currentSchoolYear(): string {
+  const now = new Date()
+  const y = now.getFullYear()
+  return now.getMonth() + 1 >= 9 ? `${y}-${y + 1}` : `${y - 1}-${y}`
+}
 
 function trimesterDot(ts: TrimesterStatus | undefined, t: number) {
   if (!ts) return { color: 'bg-gray-200', label: `T${t}` }
@@ -24,10 +32,12 @@ export default function Dashboard() {
   const navigate    = useNavigate()
   const qc          = useQueryClient()
   const fileRef     = useRef<HTMLInputElement>(null)
+  const { user, logout } = useAuth()
 
   const [uploading,  setUploading]  = useState(false)
   const [error,      setError]      = useState('')
   const [menuOpen,   setMenuOpen]   = useState(false)
+  const [createOpen, setCreateOpen] = useState(false)
   // Dismissed "no taqyim" warnings per class-trimester key
   const [dismissed,  setDismissed]  = useState<Set<string>>(new Set())
 
@@ -61,7 +71,10 @@ export default function Dashboard() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-xl font-bold text-gray-900">إدارة النقاط</h1>
-            <p className="arabic text-sm text-gray-500">اللغة الفرنسية — المرحلة الابتدائية</p>
+            <p className="arabic text-sm text-gray-500">
+              اللغة الفرنسية — المرحلة الابتدائية
+              {user?.full_name && <span className="text-gray-400"> · {user.full_name}</span>}
+            </p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -83,10 +96,20 @@ export default function Dashboard() {
                 ☰
               </button>
               {menuOpen && (
-                <div className="absolute right-0 mt-1 w-52 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
+                <div className="absolute right-0 mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
                   <button onClick={() => { setMenuOpen(false); navigate('/profile') }}
                           className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 text-right border-b border-gray-100 arabic" dir="rtl">
                     <span className="text-base">👩‍🏫</span> ملف المعلم
+                  </button>
+                  {user?.role === 'admin' && (
+                    <button onClick={() => { setMenuOpen(false); navigate('/admin') }}
+                            className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 text-right border-b border-gray-100 arabic" dir="rtl">
+                      <span className="text-base">🛡️</span> إدارة الحسابات
+                    </button>
+                  )}
+                  <button onClick={() => { setMenuOpen(false); setCreateOpen(true) }}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 text-right border-b border-gray-100 arabic" dir="rtl">
+                    <span className="text-base">➕</span> قسم جديد (بدون PDF)
                   </button>
                   {years.flatMap(y => y.classes).map(cls => (
                     <button
@@ -104,6 +127,14 @@ export default function Dashboard() {
                       </span>
                     </button>
                   ))}
+                  <button onClick={() => { setMenuOpen(false); navigate('/change-password') }}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 text-right border-t border-gray-100 arabic" dir="rtl">
+                    <span className="text-base">🔑</span> تغيير كلمة المرور
+                  </button>
+                  <button onClick={() => { setMenuOpen(false); logout(); navigate('/login') }}
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-red-600 hover:bg-red-50 text-right arabic" dir="rtl">
+                    <span className="text-base">🚪</span> تسجيل الخروج
+                  </button>
                 </div>
               )}
             </div>
@@ -150,6 +181,85 @@ export default function Dashboard() {
 
       {/* Close menu on outside click */}
       {menuOpen && <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />}
+
+      {createOpen && (
+        <CreateClassModal
+          onClose={() => setCreateOpen(false)}
+          onCreated={async (id) => {
+            setCreateOpen(false)
+            await qc.invalidateQueries({ queryKey: ['classes'] })
+            navigate(`/classes/${id}`)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Create class modal (manual, without PDF) ──────────────────────────────────
+function CreateClassModal({ onClose, onCreated }: {
+  onClose: () => void
+  onCreated: (id: string) => void
+}) {
+  const [name,    setName]    = useState('')
+  const [year,    setYear]    = useState(currentSchoolYear())
+  const [saving,  setSaving]  = useState(false)
+  const [error,   setError]   = useState('')
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    setError('')
+    setSaving(true)
+    try {
+      const res = await api.classes.create(name, year)
+      onCreated(res.id)
+    } catch (err: any) {
+      setError(err.message || 'حدث خطأ')
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4" onClick={onClose}>
+      <form onSubmit={submit} dir="rtl"
+            className="w-full max-w-sm bg-white rounded-2xl p-6 space-y-4 shadow-xl"
+            onClick={e => e.stopPropagation()}>
+        <h3 className="arabic text-lg font-bold text-gray-900">قسم جديد</h3>
+
+        {error && (
+          <div className="arabic bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm">{error}</div>
+        )}
+
+        <div>
+          <label className="arabic block text-sm font-medium text-gray-700 mb-1.5">اسم القسم</label>
+          <input
+            type="text" value={name} onChange={e => setName(e.target.value)} autoFocus
+            placeholder="مثال: السنة الخامسة أ"
+            className="arabic w-full border border-gray-200 rounded-xl px-4 py-2.5 text-right focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+        </div>
+
+        <div>
+          <label className="arabic block text-sm font-medium text-gray-700 mb-1.5">السنة الدراسية</label>
+          <input
+            type="text" value={year} onChange={e => setYear(e.target.value)} dir="ltr"
+            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
+          />
+        </div>
+
+        <p className="arabic text-xs text-gray-400">يمكنكم إضافة التلاميذ يدوياً بعد إنشاء القسم.</p>
+
+        <div className="flex gap-2">
+          <button type="submit" disabled={saving || !name.trim() || !year.trim()}
+                  className="arabic flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-xl text-sm font-medium">
+            {saving ? 'جاري الإنشاء…' : 'إنشاء'}
+          </button>
+          <button type="button" onClick={onClose}
+                  className="arabic px-5 py-2.5 text-sm text-gray-500 hover:text-gray-700">
+            إلغاء
+          </button>
+        </div>
+      </form>
     </div>
   )
 }

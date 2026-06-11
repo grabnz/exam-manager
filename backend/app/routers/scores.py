@@ -1,21 +1,21 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
-import io, traceback, urllib.parse
+import traceback, urllib.parse
 
 from ..database import get_db
-from ..models import ExamSession, StudentScore
+from ..models import StudentScore, User
 from ..schemas import ScoresSave, SCORE_FIELDS
 from ..services.excel_export import export_session
+from ..auth import get_current_user
+from .sessions import get_visible_session
 
 router = APIRouter(prefix="/api/sessions", tags=["scores"])
 
 
 @router.get("/{session_id}/scores")
-def get_scores(session_id: str, db: Session = Depends(get_db)):
-    s = db.query(ExamSession).filter_by(id=session_id).first()
-    if not s:
-        raise HTTPException(404)
+def get_scores(session_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    s = get_visible_session(db, user, session_id)
 
     scores_map = {sc.student_id: sc for sc in s.scores}
     result = []
@@ -33,11 +33,15 @@ def get_scores(session_id: str, db: Session = Depends(get_db)):
 
 
 @router.put("/{session_id}/scores")
-def save_scores(session_id: str, body: ScoresSave, db: Session = Depends(get_db)):
-    if not db.query(ExamSession).filter_by(id=session_id).first():
-        raise HTTPException(404)
+def save_scores(session_id: str, body: ScoresSave, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    s = get_visible_session(db, user, session_id)
+    if s.is_finalized:
+        raise HTTPException(400, "هذه الجلسة مقفلة. ألغوا القفل لتعديل الأعداد.")
 
+    valid_student_ids = {st.id for st in s.class_.students}
     for item in body.scores:
+        if item.student_id not in valid_student_ids:
+            continue
         sc = db.query(StudentScore).filter_by(
             session_id=session_id, student_id=item.student_id
         ).first()
@@ -52,11 +56,9 @@ def save_scores(session_id: str, body: ScoresSave, db: Session = Depends(get_db)
 
 
 @router.get("/{session_id}/export")
-def export_excel(session_id: str, db: Session = Depends(get_db)):
+def export_excel(session_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
-        s = db.query(ExamSession).filter_by(id=session_id).first()
-        if not s:
-            raise HTTPException(404)
+        s = get_visible_session(db, user, session_id)
 
         xlsx_bytes = export_session(s)
 

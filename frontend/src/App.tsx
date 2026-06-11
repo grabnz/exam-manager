@@ -1,4 +1,8 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { AuthProvider, RequireAuth, RequireAdmin } from './auth'
+import Login from './pages/Login'
+import ChangePassword from './pages/ChangePassword'
+import Admin from './pages/Admin'
 import Dashboard from './pages/Dashboard'
 import ClassDetail from './pages/ClassDetail'
 import ScoreEntry from './pages/ScoreEntry'
@@ -7,14 +11,19 @@ import Profile from './pages/Profile'
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/"                       element={<Dashboard />} />
-        <Route path="/classes/:id"            element={<ClassDetail />} />
-        <Route path="/sessions/:id"           element={<ScoreEntry />} />
-        <Route path="/sessions/:id/print"     element={<PrintFinale />} />
-        <Route path="/profile"                element={<Profile />} />
-      </Routes>
-    </BrowserRouter>
+    <AuthProvider>
+      <BrowserRouter>
+        <Routes>
+          <Route path="/login"            element={<Login />} />
+          <Route path="/change-password"  element={<RequireAuth><ChangePassword /></RequireAuth>} />
+          <Route path="/admin"            element={<RequireAuth><RequireAdmin><Admin /></RequireAdmin></RequireAuth>} />
+          <Route path="/"                 element={<RequireAuth><Dashboard /></RequireAuth>} />
+          <Route path="/classes/:id"      element={<RequireAuth><ClassDetail /></RequireAuth>} />
+          <Route path="/sessions/:id"     element={<RequireAuth><ScoreEntry /></RequireAuth>} />
+          <Route path="/sessions/:id/print" element={<RequireAuth><PrintFinale /></RequireAuth>} />
+          <Route path="/profile"          element={<RequireAuth><Profile /></RequireAuth>} />
+        </Routes>
+      </BrowserRouter>
+    </AuthProvider>
   )
 }

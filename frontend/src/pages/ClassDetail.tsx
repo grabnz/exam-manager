@@ -20,9 +20,11 @@ export default function ClassDetail() {
   const { id }    = useParams<{ id: string }>()
   const navigate  = useNavigate()
   const qc        = useQueryClient()
-  const [deleting,  setDeleting]  = useState(false)
-  const [creating,  setCreating]  = useState<string | null>(null)
-  const [deletingS, setDeletingS] = useState<string | null>(null) // session id being deleted
+  const [deleting,   setDeleting]   = useState(false)
+  const [creating,   setCreating]   = useState<string | null>(null)
+  const [deletingS,  setDeletingS]  = useState<string | null>(null) // session id being deleted
+  const [newStudent, setNewStudent] = useState('')
+  const [addingStudent, setAddingStudent] = useState(false)
 
   const { data, isLoading, error } = useQuery<ClassDetailType>({
     queryKey: ['class', id],
@@ -57,6 +59,41 @@ export default function ClassDetail() {
     setDeletingS(null)
   }
 
+  async function renameClass() {
+    const name = window.prompt('اسم القسم الجديد :', data?.name ?? '')
+    if (!name?.trim() || name.trim() === data?.name) return
+    await api.classes.rename(id!, name.trim())
+    await qc.invalidateQueries({ queryKey: ['class', id] })
+    await qc.invalidateQueries({ queryKey: ['classes'] })
+  }
+
+  async function addStudent(e: React.FormEvent) {
+    e.preventDefault()
+    const name = newStudent.trim()
+    if (!name) return
+    setAddingStudent(true)
+    try {
+      await api.students.add(id!, name)
+      setNewStudent('')
+      await qc.invalidateQueries({ queryKey: ['class', id] })
+    } finally {
+      setAddingStudent(false)
+    }
+  }
+
+  async function renameStudent(studentId: string, current: string) {
+    const name = window.prompt('الاسم الجديد :', current)
+    if (!name?.trim() || name.trim() === current) return
+    await api.students.rename(studentId, name.trim())
+    await qc.invalidateQueries({ queryKey: ['class', id] })
+  }
+
+  async function deleteStudent(studentId: string, name: string) {
+    if (!confirm(`حذف التلميذ "${name}" وجميع أعداده نهائياً ؟`)) return
+    await api.students.delete(studentId)
+    await qc.invalidateQueries({ queryKey: ['class', id] })
+  }
+
   if (isLoading) return <Loading />
   if (error || !data) return <p className="p-8 text-red-600">Erreur de chargement</p>
 
@@ -87,7 +124,11 @@ export default function ClassDetail() {
         </button>
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="arabic text-xl md:text-2xl font-bold text-gray-900">{data.name}</h1>
+            <h1 className="arabic text-xl md:text-2xl font-bold text-gray-900">
+              {data.name}
+              <button onClick={renameClass} title="تعديل الاسم"
+                      className="mr-2 ml-2 text-sm text-gray-300 hover:text-blue-500 align-middle">✎</button>
+            </h1>
             <div className="flex flex-wrap gap-3 mt-1 text-sm text-gray-500">
               {data.teacher && <span className="arabic">{data.teacher}</span>}
               <span>Année {data.school_year}</span>
@@ -172,14 +213,32 @@ export default function ClassDetail() {
           <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">
             Liste des élèves ({data.students.length})
           </h2>
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden max-h-[520px] overflow-y-auto">
-            {data.students.map((s, i) => (
-              <div key={s.id}
-                   className="flex items-center gap-3 px-4 py-2.5 border-b border-gray-50 last:border-0 hover:bg-gray-50">
-                <span className="text-xs text-gray-400 w-5 text-right flex-shrink-0">{i + 1}</span>
-                <span className="arabic text-sm text-gray-800">{s.full_name}</span>
-              </div>
-            ))}
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <div className="max-h-[520px] overflow-y-auto">
+              {data.students.map((s, i) => (
+                <div key={s.id}
+                     className="group flex items-center gap-3 px-4 py-2.5 border-b border-gray-50 hover:bg-gray-50">
+                  <span className="text-xs text-gray-400 w-5 text-right flex-shrink-0">{i + 1}</span>
+                  <span className="arabic text-sm text-gray-800 flex-1">{s.full_name}</span>
+                  <button onClick={() => renameStudent(s.id, s.full_name)} title="تعديل"
+                          className="text-xs text-gray-300 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition">✎</button>
+                  <button onClick={() => deleteStudent(s.id, s.full_name)} title="حذف"
+                          className="text-xs text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition">✕</button>
+                </div>
+              ))}
+            </div>
+            {/* Add student */}
+            <form onSubmit={addStudent} className="flex items-center gap-2 px-3 py-2 bg-gray-50 border-t border-gray-100">
+              <input
+                type="text" value={newStudent} onChange={e => setNewStudent(e.target.value)}
+                placeholder="إضافة تلميذ…" dir="rtl"
+                className="arabic flex-1 bg-white border border-gray-200 rounded-lg px-3 py-1.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+              <button type="submit" disabled={addingStudent || !newStudent.trim()}
+                      className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg text-lg leading-none">
+                +
+              </button>
+            </form>
           </div>
         </div>
 

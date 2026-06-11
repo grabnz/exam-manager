@@ -4,8 +4,9 @@ from sqlalchemy import inspect as sa_inspect, text
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from .database import engine, Base
-from .routers import classes, sessions, scores, profile
+from .database import engine, Base, SessionLocal
+from .routers import classes, sessions, scores, profile, auth as auth_router, users
+from .auth import hash_password
 
 # ── Create new tables (idempotent) ───────────────────────────────────────────
 Base.metadata.create_all(bind=engine)
@@ -29,6 +30,9 @@ def _ensure_columns():
         # exam_sessions
         add_col("exam_sessions", "is_finalized", "BOOLEAN DEFAULT FALSE NOT NULL")
 
+        # classes — multi-teacher ownership
+        add_col("classes", "owner_id", "VARCHAR")
+
         # student_scores — bonus fields
         for col in ["prod_ecriture_bonus", "prod_production_bonus",
                     "lect_vocale_bonus", "lect_comp_bonus",
@@ -43,8 +47,48 @@ def _ensure_columns():
 
         conn.commit()
 
+
+def _bootstrap_admin():
+    """Create the initial admin account if no users exist.
+    Credentials come from ADMIN_USERNAME / ADMIN_PASSWORD env vars
+    (defaults: admin / admin123 — forced to change password on first login).
+    Existing classes without an owner are assigned to this admin so legacy
+    data stays reachable.
+    """
+    from .models import User, Class, TeacherProfile
+
+    db = SessionLocal()
+    try:
+        if db.query(User).count() > 0:
+            return
+        username = os.getenv("ADMIN_USERNAME", "admin").strip().lower()
+        password = os.getenv("ADMIN_PASSWORD", "admin123")
+
+        # Carry over the legacy single-teacher profile, if any
+        legacy = db.query(TeacherProfile).first()
+
+        admin = User(
+            username=username,
+            password_hash=hash_password(password),
+            full_name=legacy.name if legacy else "",
+            grade=legacy.grade if legacy else "",
+            role="admin",
+            must_change_password=True,
+        )
+        db.add(admin)
+        db.flush()
+
+        db.query(Class).filter(Class.owner_id.is_(None)).update(
+            {Class.owner_id: admin.id}, synchronize_session=False
+        )
+        db.commit()
+    finally:
+        db.close()
+
+
 try:
     _ensure_columns()
+    _bootstrap_admin()
 except Exception:
     pass   # never block startup; DB may be temporarily unreachable
 
@@ -62,7 +106,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth_router.router)
+app.include_router(users.router)
 app.include_router(classes.router)
+app.include_router(classes.students_router)
 app.include_router(sessions.router)
 app.include_router(scores.router)
 app.include_router(profile.router)

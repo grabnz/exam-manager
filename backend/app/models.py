@@ -9,6 +9,20 @@ def _id():
     return str(uuid.uuid4())
 
 
+class User(Base):
+    __tablename__ = "users"
+    id                   = Column(String, primary_key=True, default=_id)
+    username             = Column(String, nullable=False, unique=True, index=True)
+    password_hash        = Column(String, nullable=False)
+    full_name            = Column(String, default="")
+    grade                = Column(String, default="")  # رتبة
+    role                 = Column(String, nullable=False, default="teacher")  # admin | teacher
+    is_active            = Column(Boolean, nullable=False, default=True)
+    must_change_password = Column(Boolean, nullable=False, default=True)
+    created_at           = Column(DateTime, default=datetime.utcnow)
+    classes              = relationship("Class", back_populates="owner")
+
+
 class SchoolYear(Base):
     __tablename__ = "school_years"
     id         = Column(String, primary_key=True, default=_id)
@@ -22,10 +36,12 @@ class Class(Base):
     __tablename__ = "classes"
     id             = Column(String, primary_key=True, default=_id)
     school_year_id = Column(String, ForeignKey("school_years.id"), nullable=False)
+    owner_id       = Column(String, ForeignKey("users.id"), nullable=True)  # NULL = legacy/unassigned
     name           = Column(String, nullable=False)
     teacher        = Column(String)
     created_at     = Column(DateTime, default=datetime.utcnow)
     school_year    = relationship("SchoolYear", back_populates="classes")
+    owner          = relationship("User", back_populates="classes")
     students       = relationship("Student", back_populates="class_",
                                   order_by="Student.order_index",
                                   cascade="all, delete-orphan")

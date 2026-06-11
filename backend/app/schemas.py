@@ -72,3 +72,56 @@ class FinalizeBody(BaseModel):
 class ProfileUpdate(BaseModel):
     name:  str
     grade: str
+
+
+# ── Auth / users ─────────────────────────────────────────────────────────────
+
+class LoginBody(BaseModel):
+    username: str
+    password: str
+
+
+class ChangePasswordBody(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class UserCreate(BaseModel):
+    username:  str
+    password:  str
+    full_name: str = ""
+    grade:     str = ""
+    role:      str = "teacher"
+
+
+class UserUpdate(BaseModel):
+    full_name: Optional[str] = None
+    grade:     Optional[str] = None
+    is_active: Optional[bool] = None
+
+
+class ResetPasswordBody(BaseModel):
+    password: str
+
+
+# ── Class / student management ───────────────────────────────────────────────
+
+class ClassCreate(BaseModel):
+    name:        str
+    school_year: str
+
+
+class ClassUpdate(BaseModel):
+    name: Optional[str] = None
+
+
+class ClassOwnerUpdate(BaseModel):
+    owner_id: Optional[str] = None
+
+
+class StudentCreate(BaseModel):
+    full_name: str
+
+
+class StudentUpdate(BaseModel):
+    full_name: str
