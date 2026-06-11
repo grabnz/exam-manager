@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, SessionInfo, ScoreRow, ScoreSaveItem, TemplateDef } from '../api/client'
+import { api, ApiError, SessionInfo, ScoreRow, ScoreSaveItem, TemplateDef } from '../api/client'
 import { groups as templateGroups, finalFromGroupTotals } from '../lib/grid'
 import { palette, UIPalette } from '../lib/palette'
+import { enqueue, getQueued, removeQueued, flushOne, QueuedSave } from '../lib/offlineQueue'
 
 // ── UI structure built from the session's pinned grid template ────────────────
 // Flattened value keys inside the score map:
@@ -103,6 +104,9 @@ export default function ScoreEntry() {
   const [xlsxLoading,  setXlsxLoading]  = useState(false)
   const [search,       setSearch]       = useState('')
   const [finalizing,   setFinalizing]   = useState(false)
+  const [baseUpdatedAt, setBaseUpdatedAt] = useState<string | null>(null)
+  const [queuedSave,   setQueuedSave]   = useState<QueuedSave | null>(null)
+  const [conflict,     setConflict]     = useState(false)
   const qc = useQueryClient()
 
   const { data: session } = useQuery<SessionInfo>({ queryKey: ['session', id], queryFn: () => api.sessions.get(id!), refetchOnWindowFocus: false })
@@ -119,7 +123,30 @@ export default function ScoreEntry() {
 
   const tabs = useMemo(() => (template ? buildTabs(template) : []), [template])
 
-  useEffect(() => { if (rows.length) setScoreMap(initMap(rows)) }, [rows])
+  useEffect(() => {
+    if (!rows.length) return
+    const map = initMap(rows)
+    const latest = rows.reduce<string | null>(
+      (acc, r) => (r.updated_at && (!acc || r.updated_at > acc) ? r.updated_at : acc), null)
+    setBaseUpdatedAt(latest)
+    // Overlay scores saved locally while offline (not yet synced)
+    void getQueued(id!).then(q => {
+      if (q) {
+        for (const item of q.scores) {
+          const m: Record<string, number | null> = {}
+          for (const [cid, v] of Object.entries(item.criteria)) m[`c:${cid}`] = v
+          for (const [sid, sv] of Object.entries(item.sections)) {
+            m[`b:${sid}`] = sv?.bonus ?? null
+            m[`s:${sid}`] = sv?.st ?? null
+          }
+          map[item.student_id] = m
+        }
+        setQueuedSave(q)
+        if (q.status === 'conflict') setConflict(true)
+      }
+      setScoreMap(map)
+    })
+  }, [rows, id])
   useEffect(() => { if (tabs.length && !activeTab) setActiveTab(tabs[0].key) }, [tabs, activeTab])
 
   const visibleRows = search.trim()
@@ -146,21 +173,55 @@ export default function ScoreEntry() {
     }
   }
 
-  async function save() {
+  function collectScores(): ScoreSaveItem[] {
+    return rows.map(r => ({
+      student_id: r.student_id,
+      ...unflatten(scoreMap[r.student_id]),
+    }))
+  }
+
+  async function save(force = false) {
     setSaving(true)
     setSaveErr('')
+    const scores = collectScores()
     try {
-      const scores: ScoreSaveItem[] = rows.map(r => ({
-        student_id: r.student_id,
-        ...unflatten(scoreMap[r.student_id]),
-      }))
-      await api.scores.save(id!, scores)
+      const res = await api.scores.save(id!, scores, { baseUpdatedAt, force })
+      await removeQueued(id!)
+      setQueuedSave(null)
+      setConflict(false)
+      setBaseUpdatedAt(res.saved_at)
       setIsDirty(false)
       setSaveMsg('تم الحفظ ✓')
       setTimeout(() => setSaveMsg(''), 3000)
     } catch (err: any) {
-      setSaveErr(err.message || 'فشل الحفظ')
+      if (err instanceof ApiError && err.status === 409) {
+        await enqueue(id!, scores, baseUpdatedAt)
+        setQueuedSave(await getQueued(id!) ?? null)
+        setConflict(true)
+      } else if (err instanceof ApiError) {
+        setSaveErr(err.message || 'فشل الحفظ')
+      } else {
+        // Network failure — keep the scores locally, sync later
+        await enqueue(id!, scores, baseUpdatedAt)
+        setQueuedSave(await getQueued(id!) ?? null)
+        setIsDirty(false)
+        setSaveMsg('محفوظ محليًا 📡')
+      }
     } finally { setSaving(false) }
+  }
+
+  async function resolveConflict(overwrite: boolean) {
+    const q = await getQueued(id!)
+    if (overwrite) {
+      if (q) await flushOne({ ...q, status: 'pending' }, true)
+      else await save(true)
+    } else {
+      await removeQueued(id!)
+    }
+    setQueuedSave(null)
+    setConflict(false)
+    setIsDirty(false)
+    await qc.invalidateQueries({ queryKey: ['scores', id] })
   }
 
   const tab = tabs.find(t => t.key === activeTab) ?? null
@@ -175,7 +236,7 @@ export default function ScoreEntry() {
         onUpdate={update}
         onClose={() => setMobileIdx(null)}
         onNavigate={setMobileIdx}
-        isDirty={isDirty} saving={saving} saveMsg={saveMsg} onSave={save}
+        isDirty={isDirty} saving={saving} saveMsg={saveMsg} onSave={() => save()}
       />
     )
   }
@@ -227,7 +288,7 @@ export default function ScoreEntry() {
             </button>
 
             {!locked && (
-              <button onClick={save} disabled={saving || !isDirty}
+              <button onClick={() => save()} disabled={saving || !isDirty}
                       className="arabic text-xs bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white px-3 py-1.5 rounded-lg font-medium">
                 {saving ? '…' : isDirty ? 'حفظ' : '✓'}
               </button>
@@ -270,6 +331,44 @@ export default function ScoreEntry() {
           </button>
         )}
       </div>
+
+      {/* ── Offline queue banner ── */}
+      {queuedSave && queuedSave.status === 'pending' && !conflict && (
+        <div className="arabic flex items-center gap-2 px-4 md:px-6 py-2 bg-amber-50 border-b border-amber-200 text-sm text-amber-800 flex-shrink-0" dir="rtl">
+          <span>📡</span>
+          <span className="font-medium">محفوظ محليًا — سيُرسل تلقائياً عند عودة الاتصال.</span>
+        </div>
+      )}
+      {queuedSave && queuedSave.status === 'error' && (
+        <div className="arabic flex items-center gap-2 px-4 md:px-6 py-2 bg-red-50 border-b border-red-200 text-sm text-red-700 flex-shrink-0" dir="rtl">
+          <span>⚠</span>
+          <span className="font-medium">تعذّرت مزامنة الحفظ المحلي: {queuedSave.message}</span>
+          <button onClick={() => { void removeQueued(id!).then(() => { setQueuedSave(null); qc.invalidateQueries({ queryKey: ['scores', id] }) }) }}
+                  className="mr-auto text-xs underline">تجاهل</button>
+        </div>
+      )}
+
+      {/* ── Conflict dialog ── */}
+      {conflict && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+          <div className="w-full max-w-sm bg-white rounded-2xl p-6 space-y-4 shadow-xl" dir="rtl">
+            <h3 className="arabic text-lg font-bold text-gray-900">⚠ تعارض في الأعداد</h3>
+            <p className="arabic text-sm text-gray-600">
+              تم تعديل أعداد هذه الجلسة من جهاز آخر بعد آخر مزامنة. ماذا تريدون أن تفعلوا؟
+            </p>
+            <div className="space-y-2">
+              <button onClick={() => void resolveConflict(true)}
+                      className="arabic w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium">
+                استبدال بنسختي (هذا الجهاز)
+              </button>
+              <button onClick={() => void resolveConflict(false)}
+                      className="arabic w-full py-2.5 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl text-sm font-medium">
+                تحميل نسخة الخادم وإلغاء تعديلاتي
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Lock banner ── */}
       {locked && (

@@ -1,5 +1,7 @@
+import { useEffect } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, RequireAuth, RequireAdmin } from './auth'
+import { startQueueSync } from './lib/offlineQueue'
 import Login from './pages/Login'
 import ChangePassword from './pages/ChangePassword'
 import AdminLayout from './pages/admin/AdminLayout'
@@ -15,6 +17,7 @@ import PrintFinale from './pages/PrintFinale'
 import Profile from './pages/Profile'
 
 export default function App() {
+  useEffect(() => { startQueueSync() }, [])
   return (
     <AuthProvider>
       <BrowserRouter>

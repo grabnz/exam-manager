@@ -1,8 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { api, YearGroup, ClassSummary, ClassSubjectStatus, TrimesterStatus } from '../api/client'
 import { useAuth } from '../auth'
+import { pendingCount, onQueueChange } from '../lib/offlineQueue'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const TRIMESTERS = [1, 2, 3]
@@ -22,6 +23,13 @@ export default function Dashboard() {
   const isAdmin = user?.role === 'admin'
 
   const [menuOpen, setMenuOpen] = useState(false)
+  const [pending,  setPending]  = useState(0)
+
+  useEffect(() => {
+    const refresh = () => { void pendingCount().then(setPending) }
+    refresh()
+    return onQueueChange(refresh)
+  }, [])
 
   const { data: years = [], isLoading } = useQuery<YearGroup[]>({
     queryKey: ['classes'],
@@ -87,6 +95,11 @@ export default function Dashboard() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 md:px-6 py-6">
+        {pending > 0 && (
+          <div className="arabic mb-4 flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 px-4 py-2.5 rounded-lg text-sm" dir="rtl">
+            <span>📡</span> {pending} حفظ بانتظار المزامنة — سيُرسل تلقائياً عند عودة الاتصال.
+          </div>
+        )}
         {isLoading && <div className="flex justify-center py-20"><Spinner /></div>}
 
         {!isLoading && years.length === 0 && (
