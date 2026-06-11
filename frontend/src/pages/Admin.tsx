@@ -20,9 +20,7 @@ export default function Admin() {
 
   const [error, setError] = useState('')
 
-  const unowned = years.flatMap(y =>
-    y.classes.filter(c => !c.owner_id).map(c => ({ ...c, year: y.label }))
-  )
+  const allClasses = years.flatMap(y => y.classes.map(c => ({ ...c, year: y.label })))
   const teachers = users.filter(u => u.is_active)
 
   async function run(fn: () => Promise<unknown>) {
@@ -85,25 +83,28 @@ export default function Admin() {
           )}
         </section>
 
-        {/* Unowned classes */}
-        {unowned.length > 0 && (
+        {/* Class ownership */}
+        {allClasses.length > 0 && (
           <section>
             <h2 className="arabic text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 text-right" dir="rtl">
-              أقسام بدون معلم ({unowned.length})
+              إسناد الأقسام ({allClasses.length})
             </h2>
             <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
-              {unowned.map(c => (
+              {allClasses.map(c => (
                 <div key={c.id} className="flex items-center justify-between gap-3 px-4 py-3" dir="rtl">
-                  <div>
+                  <div className="min-w-0">
                     <span className="arabic text-sm font-medium text-gray-800">{c.name}</span>
                     <span className="arabic text-xs text-gray-400 mr-2">{c.year}</span>
+                    {!c.owner_id && (
+                      <span className="arabic text-xs bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full mr-2">بدون معلم</span>
+                    )}
                   </div>
                   <select
-                    defaultValue=""
-                    onChange={e => { if (e.target.value) run(() => api.classes.assignOwner(c.id, e.target.value)) }}
-                    className="arabic text-sm border border-gray-200 rounded-lg px-2 py-1.5"
+                    value={c.owner_id ?? ''}
+                    onChange={e => run(() => api.classes.assignOwner(c.id, e.target.value || null))}
+                    className="arabic text-sm border border-gray-200 rounded-lg px-2 py-1.5 flex-shrink-0"
                   >
-                    <option value="">إسناد إلى…</option>
+                    <option value="">— بدون معلم —</option>
                     {teachers.map(t => (
                       <option key={t.id} value={t.id}>{t.full_name || t.username}</option>
                     ))}

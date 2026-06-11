@@ -52,14 +52,14 @@ def _bootstrap_admin():
     """Create the initial admin account if no users exist.
     Credentials come from ADMIN_USERNAME / ADMIN_PASSWORD env vars
     (defaults: admin / admin123 — forced to change password on first login).
-    Existing classes without an owner are assigned to this admin so legacy
-    data stays reachable.
+    Legacy classes (no owner) stay unowned: the admin sees them and assigns
+    them to the right teacher from the admin page.
 
     Recovery: if ADMIN_FORCE_RESET=1, the admin's password is reset from
     ADMIN_PASSWORD on startup (only useful when the admin password is lost;
     remove the variable afterwards).
     """
-    from .models import User, Class, TeacherProfile
+    from .models import User
 
     db = SessionLocal()
     try:
@@ -77,23 +77,13 @@ def _bootstrap_admin():
         if db.query(User).count() > 0:
             return
 
-        # Carry over the legacy single-teacher profile, if any
-        legacy = db.query(TeacherProfile).first()
-
         admin = User(
             username=username,
             password_hash=hash_password(password),
-            full_name=legacy.name if legacy else "",
-            grade=legacy.grade if legacy else "",
             role="admin",
             must_change_password=True,
         )
         db.add(admin)
-        db.flush()
-
-        db.query(Class).filter(Class.owner_id.is_(None)).update(
-            {Class.owner_id: admin.id}, synchronize_session=False
-        )
         db.commit()
     finally:
         db.close()
