@@ -175,6 +175,40 @@ def _seed_french_template(db):
         seed_template(db, FRENCH_TEMPLATE)
 
 
+def _generic_template_spec(subject: Subject) -> dict:
+    """Default editable معايير grid for a subject: one domain with 4 criteria
+    (each /5 → total /20) + bonus التميز + manual-total override. Directors
+    clone and adjust to the official grid of each level."""
+    ltr = subject.code == "anglais"
+    labels = ["C1", "C2", "C3", "C4"] if ltr else ["مع1", "مع2", "مع3", "مع4"]
+    color_cycle = ["teal", "purple", "rose", "green", "orange", "blue"]
+    color = color_cycle[(subject.order_index or 0) % len(color_cycle)]
+    return {
+        "code": f"{subject.code}_generic_v1",
+        "subject_code": subject.code,
+        "name": f"{subject.name_ar} — شبكة المعايير",
+        "final_formula": "sum_sections",
+        "direction": "ltr" if ltr else "rtl",
+        "sections": [
+            {"code": f"{subject.code}_main", "group_key": "main",
+             "group_label": subject.name_fr if ltr and subject.name_fr else subject.name_ar,
+             "label": "Critères" if ltr else "معايير التقييم",
+             "has_bonus": True, "allow_st": True, "color_key": color,
+             "criteria": [(f"{subject.code}_m{i+1}", lbl) for i, lbl in enumerate(labels)],
+             "max_scores": {f"{subject.code}_m{i+1}": 5.0 for i in range(4)}},
+        ],
+    }
+
+
+def _seed_all_subject_templates(db):
+    """Every active subject gets a starter grid (skip those that have one)."""
+    for subject in db.query(Subject).filter_by(is_active=True).all():
+        has_template = db.query(GridTemplate).filter_by(subject_id=subject.id).first()
+        if not has_template:
+            seed_template(db, _generic_template_spec(subject))
+    db.flush()
+
+
 def _backfill_sessions_subject(db):
     subject = db.query(Subject).filter_by(code="francais").first()
     template = db.query(GridTemplate).filter_by(code=FRENCH_TEMPLATE["code"]).first()
@@ -282,6 +316,7 @@ def run_data_migrations():
         _once(db, "seed_school_settings_v1", _seed_school_settings)
         _once(db, "backfill_assignments_v1", _backfill_assignments)
         _once(db, "migrate_scores_to_entries_v1", _migrate_scores_to_entries)
+        _once(db, "seed_templates_all_v1", _seed_all_subject_templates)
     finally:
         if engine.dialect.name == "postgresql":
             try:

@@ -1,10 +1,11 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 
 const TABS = [
-  { to: '/admin/users',       label: 'الحسابات',  icon: '👥' },
-  { to: '/admin/classes',     label: 'الأقسام',   icon: '🏫' },
-  { to: '/admin/assignments', label: 'الإسناد',   icon: '🔗' },
-  { to: '/admin/settings',    label: 'الإعدادات', icon: '⚙️' },
+  { to: '/admin/users',       label: 'الحسابات',      icon: '👥' },
+  { to: '/admin/classes',     label: 'الأقسام',       icon: '🏫' },
+  { to: '/admin/assignments', label: 'الإسناد',       icon: '🔗' },
+  { to: '/admin/templates',   label: 'شبكات التقييم', icon: '📐' },
+  { to: '/admin/settings',    label: 'الإعدادات',     icon: '⚙️' },
 ]
 
 export default function AdminLayout() {

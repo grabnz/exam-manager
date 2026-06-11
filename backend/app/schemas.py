@@ -148,6 +148,30 @@ class SettingsUpdate(BaseModel):
     region:      str = ""
 
 
+# ── Template editing (director) ──────────────────────────────────────────────
+
+class CriterionSpec(BaseModel):
+    label:     str
+    max_score: Optional[float] = None
+
+
+class SectionSpec(BaseModel):
+    group_label:       str
+    label:             str
+    has_bonus:         bool = True
+    allow_st_override: bool = True
+    color_key:         Optional[str] = None
+    criteria:          List[CriterionSpec]
+
+
+class TemplateUpdate(BaseModel):
+    name:          str
+    final_formula: str = "sum_sections"   # avg_groups | sum_sections | sum_capped
+    final_cap:     Optional[float] = None
+    direction:     str = "rtl"
+    sections:      List[SectionSpec]
+
+
 class StudentCreate(BaseModel):
     full_name: str
 

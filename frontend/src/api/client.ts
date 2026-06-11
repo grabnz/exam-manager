@@ -139,6 +139,22 @@ export interface ScoreSaveItem {
   sections: Record<string, SectionValues>
 }
 
+// Director template editor payload
+export interface TemplateSpec {
+  name: string
+  final_formula: 'avg_groups' | 'sum_sections' | 'sum_capped'
+  final_cap?: number | null
+  direction: 'rtl' | 'ltr'
+  sections: {
+    group_label: string
+    label: string
+    has_bonus: boolean
+    allow_st_override: boolean
+    color_key?: string | null
+    criteria: { label: string; max_score?: number | null }[]
+  }[]
+}
+
 // ── API calls ──────────────────────────────────────────────────────────────
 
 export const api = {
@@ -187,6 +203,14 @@ export const api = {
       req<{ id: string; name: string; is_builtin: boolean; final_formula: string; direction: string }[]>(
         `/subjects/${subjectId}/templates`),
     get: (id: string) => req<TemplateDef>(`/templates/${id}`),
+    clone: (id: string) => req<{ id: string; name: string }>(`/templates/${id}/clone`, { method: 'POST' }),
+    update: (id: string, spec: TemplateSpec) =>
+      req<{ ok: boolean }>(`/templates/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(spec),
+      }),
+    delete: (id: string) => req<{ ok: boolean }>(`/templates/${id}`, { method: 'DELETE' }),
   },
   assignments: {
     list: () => req<AssignmentRow[]>('/assignments'),

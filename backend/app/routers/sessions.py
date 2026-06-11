@@ -80,10 +80,11 @@ def create_session(class_id: str, body: SessionCreate, user: User = Depends(get_
     if existing:
         return {"id": existing.id}
 
+    # The school's customized grid (newest custom) wins over the built-in
     template = (
         db.query(GridTemplate)
         .filter_by(subject_id=subject.id, is_active=True)
-        .order_by(GridTemplate.is_builtin.desc(), GridTemplate.created_at)
+        .order_by(GridTemplate.is_builtin.asc(), GridTemplate.created_at.desc())
         .first()
     )
     if not template:

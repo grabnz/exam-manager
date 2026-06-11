@@ -6,6 +6,7 @@ import AdminLayout from './pages/admin/AdminLayout'
 import Users from './pages/admin/Users'
 import Classes from './pages/admin/Classes'
 import Assignments from './pages/admin/Assignments'
+import Templates from './pages/admin/Templates'
 import Settings from './pages/admin/Settings'
 import Dashboard from './pages/Dashboard'
 import ClassDetail from './pages/ClassDetail'
@@ -25,6 +26,7 @@ export default function App() {
             <Route path="users"           element={<Users />} />
             <Route path="classes"         element={<Classes />} />
             <Route path="assignments"     element={<Assignments />} />
+            <Route path="templates"       element={<Templates />} />
             <Route path="settings"        element={<Settings />} />
           </Route>
           <Route path="/"                 element={<RequireAuth><Dashboard /></RequireAuth>} />
