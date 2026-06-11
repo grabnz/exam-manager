@@ -24,6 +24,8 @@ def _user_out(u: User) -> dict:
 
 @router.post("/login")
 def login(body: LoginBody, db: Session = Depends(get_db)):
+    if not body.password:
+        raise HTTPException(401, "اسم المستخدم أو كلمة المرور غير صحيحة")
     user = db.query(User).filter_by(username=body.username.strip().lower()).first()
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(401, "اسم المستخدم أو كلمة المرور غير صحيحة")

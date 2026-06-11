@@ -13,8 +13,8 @@ from sqlalchemy.orm import Session
 from .database import get_db
 from .models import User
 
-SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
-TOKEN_TTL_HOURS = int(os.getenv("TOKEN_TTL_HOURS", "72"))
+SECRET_KEY = os.getenv("SECRET_KEY") or "dev-secret-change-me"
+TOKEN_TTL_HOURS = int(os.getenv("TOKEN_TTL_HOURS") or "72")
 PBKDF2_ITERATIONS = 260_000
 
 _bearer = HTTPBearer(auto_error=False)

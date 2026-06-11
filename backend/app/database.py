@@ -3,7 +3,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./exam_manager.db")
+DATABASE_URL = os.getenv("DATABASE_URL") or "sqlite:///./exam_manager.db"
 
 # Normalize postgres:// → postgresql:// (Railway / old Heroku convention)
 if DATABASE_URL.startswith("postgres://"):

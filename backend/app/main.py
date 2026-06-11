@@ -54,15 +54,28 @@ def _bootstrap_admin():
     (defaults: admin / admin123 — forced to change password on first login).
     Existing classes without an owner are assigned to this admin so legacy
     data stays reachable.
+
+    Recovery: if ADMIN_FORCE_RESET=1, the admin's password is reset from
+    ADMIN_PASSWORD on startup (only useful when the admin password is lost;
+    remove the variable afterwards).
     """
     from .models import User, Class, TeacherProfile
 
     db = SessionLocal()
     try:
+        username = (os.getenv("ADMIN_USERNAME") or "admin").strip().lower()
+        password = os.getenv("ADMIN_PASSWORD") or "admin123"
+        force_reset = os.getenv("ADMIN_FORCE_RESET") == "1"
+
+        admin = db.query(User).filter_by(username=username).first()
+        if admin:
+            if force_reset:
+                admin.password_hash = hash_password(password)
+                admin.must_change_password = True
+                db.commit()
+            return
         if db.query(User).count() > 0:
             return
-        username = os.getenv("ADMIN_USERNAME", "admin").strip().lower()
-        password = os.getenv("ADMIN_PASSWORD", "admin123")
 
         # Carry over the legacy single-teacher profile, if any
         legacy = db.query(TeacherProfile).first()
@@ -88,14 +101,18 @@ def _bootstrap_admin():
 
 try:
     _ensure_columns()
+except Exception as e:
+    print(f"[startup] column migration failed: {e!r}")  # visible in serverless logs
+
+try:
     _bootstrap_admin()
-except Exception:
-    pass   # never block startup; DB may be temporarily unreachable
+except Exception as e:
+    print(f"[startup] admin bootstrap failed: {e!r}")
 
 
 app = FastAPI(title="Exam Score Manager", version="1.0.0")
 
-_raw = os.getenv("ALLOWED_ORIGINS", "*")
+_raw = os.getenv("ALLOWED_ORIGINS") or "*"
 origins = [o.strip() for o in _raw.split(",")] if _raw != "*" else ["*"]
 
 app.add_middleware(
