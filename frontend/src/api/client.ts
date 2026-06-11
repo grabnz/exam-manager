@@ -1,4 +1,16 @@
+import type { TemplateDef, StudentValues, SectionValues } from '../lib/grid'
+
 const BASE = (import.meta.env.VITE_API_URL ?? '') + '/api'
+
+export class ApiError extends Error {
+  status: number
+  body: any
+  constructor(status: number, message: string, body?: any) {
+    super(message)
+    this.status = status
+    this.body = body
+  }
+}
 
 const TOKEN_KEY = 'em_token'
 const USER_KEY  = 'em_user'
@@ -43,7 +55,7 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({}))
-    throw new Error(err.detail || `HTTP ${res.status}`)
+    throw new ApiError(res.status, err.detail || `HTTP ${res.status}`, err)
   }
   return res.json()
 }
@@ -111,20 +123,20 @@ export interface SessionInfo {
   is_admin: boolean
 }
 
-export type ScoreRow = {
+export type { TemplateDef, StudentValues, SectionValues } from '../lib/grid'
+
+export interface ScoreRow {
   student_id: string; student_name: string; order_index: number
-  prod_dictee_c4?: number | null
-  prod_ecriture_c2?: number | null; prod_ecriture_c7?: number | null; prod_ecriture_bonus?: number | null; prod_ecriture_st?: number | null
-  prod_production_c1?: number | null; prod_production_c3?: number | null
-  prod_production_c5?: number | null; prod_production_c6?: number | null; prod_production_bonus?: number | null; prod_production_st?: number | null
-  lect_vocale_c1?: number | null; lect_vocale_c5?: number | null; lect_vocale_bonus?: number | null; lect_vocale_st?: number | null
-  lect_comp_c2?: number | null; lect_comp_c3?: number | null
-  lect_comp_c4?: number | null; lect_comp_c6?: number | null; lect_comp_bonus?: number | null; lect_comp_st?: number | null
-  com_rec_c1?: number | null; com_rec_c2?: number | null
-  com_rec_c3?: number | null; com_rec_c4?: number | null; com_rec_bonus?: number | null; com_rec_st?: number | null
-  com_oral_c1?: number | null; com_oral_c2?: number | null
-  com_oral_c3?: number | null; com_oral_c4?: number | null
-  com_oral_c5?: number | null; com_oral_c6?: number | null; com_oral_bonus?: number | null; com_oral_st?: number | null
+  criteria: Record<string, number | null>
+  sections: Record<string, SectionValues>
+  final_score: number | null
+  updated_at: string | null
+}
+
+export interface ScoreSaveItem {
+  student_id: string
+  criteria: Record<string, number | null>
+  sections: Record<string, SectionValues>
 }
 
 // ── API calls ──────────────────────────────────────────────────────────────
@@ -169,6 +181,12 @@ export const api = {
   },
   subjects: {
     list: () => req<Subject[]>('/subjects'),
+  },
+  templates: {
+    listForSubject: (subjectId: string) =>
+      req<{ id: string; name: string; is_builtin: boolean; final_formula: string; direction: string }[]>(
+        `/subjects/${subjectId}/templates`),
+    get: (id: string) => req<TemplateDef>(`/templates/${id}`),
   },
   assignments: {
     list: () => req<AssignmentRow[]>('/assignments'),
@@ -253,11 +271,15 @@ export const api = {
   },
   scores: {
     get:    (sessionId: string) => req<ScoreRow[]>(`/sessions/${sessionId}/scores`),
-    save:   (sessionId: string, scores: Omit<ScoreRow, 'student_name' | 'order_index'>[]) =>
-      req<{ ok: boolean }>(`/sessions/${sessionId}/scores`, {
+    save:   (sessionId: string, scores: ScoreSaveItem[], opts?: { baseUpdatedAt?: string | null; force?: boolean }) =>
+      req<{ ok: boolean; saved_at: string }>(`/sessions/${sessionId}/scores`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scores }),
+        body: JSON.stringify({
+          scores,
+          base_updated_at: opts?.baseUpdatedAt ?? null,
+          force: opts?.force ?? false,
+        }),
       }),
     downloadExcel: async (sessionId: string): Promise<string | null> => {
       const res = await fetch(`${BASE}/sessions/${sessionId}/export`, { headers: authHeaders() })

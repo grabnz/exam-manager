@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict
 from datetime import datetime
 
 
@@ -58,6 +58,23 @@ class StudentScoreIn(ScoreFields):
 
 class ScoresSave(BaseModel):
     scores: List[StudentScoreIn]
+
+
+class SectionValuesIn(BaseModel):
+    bonus: Optional[float] = None
+    st:    Optional[float] = None
+
+
+class ScoreEntryIn(BaseModel):
+    student_id: str
+    criteria: Dict[str, Optional[float]] = {}
+    sections: Dict[str, SectionValuesIn] = {}
+
+
+class ScoresSaveV2(BaseModel):
+    scores: List[ScoreEntryIn]
+    base_updated_at: Optional[datetime] = None  # offline conflict detection
+    force: bool = False
 
 
 class SessionCreate(BaseModel):

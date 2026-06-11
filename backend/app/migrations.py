@@ -18,7 +18,9 @@ from .models import (
     SchemaMigration, SchoolSettings, Subject,
     GridTemplate, GridSection, GridCriterion,
     ExamSession, Class, TeacherAssignment, User,
+    StudentScore, ScoreEntry,
 )
+from .services import grid
 
 # ── Additive column migrations ───────────────────────────────────────────────
 
@@ -201,6 +203,52 @@ def _seed_school_settings(db):
         db.add(SchoolSettings(id=1))
 
 
+def _migrate_scores_to_entries(db):
+    """Convert legacy 34-column student_scores rows into generic score_entries
+    JSON keyed by the French template's criterion/section ids. The legacy table
+    is left untouched (archive / rollback safety)."""
+    template = db.query(GridTemplate).filter_by(code=FRENCH_TEMPLATE["code"]).first()
+
+    # code → id maps from the seeded template
+    crit_by_code = {}
+    sec_by_code = {}
+    for section in template.sections:
+        sec_by_code[section.code] = section
+        for c in section.criteria:
+            crit_by_code[c.code] = c.id
+
+    migrated = 0
+    for row in db.query(StudentScore).all():
+        exists = db.query(ScoreEntry).filter_by(
+            session_id=row.session_id, student_id=row.student_id
+        ).first()
+        if exists:
+            continue
+
+        criteria = {}
+        for code, cid in crit_by_code.items():
+            criteria[cid] = getattr(row, code, None)
+        sections = {}
+        for code, section in sec_by_code.items():
+            if section.has_bonus or section.allow_st_override:
+                sections[section.id] = {
+                    "bonus": getattr(row, f"{code}_bonus", None),
+                    "st":    getattr(row, f"{code}_st", None),
+                }
+        values = {"criteria": criteria, "sections": sections}
+
+        db.add(ScoreEntry(
+            session_id=row.session_id,
+            student_id=row.student_id,
+            values=values,
+            final_score=grid.final_score(template, values),
+            updated_at=datetime.utcnow(),
+        ))
+        migrated += 1
+    db.flush()
+    print(f"[migrations] migrated {migrated} student_scores rows to score_entries")
+
+
 def _backfill_assignments(db):
     """Convert legacy class ownership into (teacher, class, français)
     assignments. Classes owned by an admin (or unowned) stay unassigned —
@@ -233,6 +281,7 @@ def run_data_migrations():
         _once(db, "unique_index_sessions_v1", _swap_sessions_unique_index)
         _once(db, "seed_school_settings_v1", _seed_school_settings)
         _once(db, "backfill_assignments_v1", _backfill_assignments)
+        _once(db, "migrate_scores_to_entries_v1", _migrate_scores_to_entries)
     finally:
         if engine.dialect.name == "postgresql":
             try:
