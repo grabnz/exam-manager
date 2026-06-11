@@ -1,68 +1,32 @@
-import { useState, useRef } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { api, YearGroup, ClassSummary, TrimesterStatus } from '../api/client'
+import { api, YearGroup, ClassSummary, ClassSubjectStatus, TrimesterStatus } from '../api/client'
 import { useAuth } from '../auth'
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const TRIMESTERS = [1, 2, 3]
 
-// Tunisian school year runs September → June
-function currentSchoolYear(): string {
-  const now = new Date()
-  const y = now.getFullYear()
-  return now.getMonth() + 1 >= 9 ? `${y}-${y + 1}` : `${y - 1}-${y}`
-}
-
-function trimesterDot(ts: TrimesterStatus | undefined, t: number) {
-  if (!ts) return { color: 'bg-gray-200', label: `T${t}` }
-  if (ts.imtihan_finalized) return { color: 'bg-green-500', label: `T${t}` }
-  if (ts.imtihan_exists)    return { color: 'bg-amber-400', label: `T${t}` }
-  if (ts.has_taqyim)        return { color: 'bg-blue-400',  label: `T${t}` }
-  return { color: 'bg-gray-200', label: `T${t}` }
-}
-
-// Returns true if امتحان exists for this trimester but no تقييم was ever added
-function hasImtihanWithoutTaqyim(status: TrimesterStatus) {
-  return status.imtihan_exists && !status.has_taqyim
+function trimesterDot(ts: TrimesterStatus | undefined) {
+  if (!ts) return 'bg-gray-200'
+  if (ts.imtihan_finalized) return 'bg-green-500'
+  if (ts.imtihan_exists)    return 'bg-amber-400'
+  if (ts.has_taqyim)        return 'bg-blue-400'
+  return 'bg-gray-200'
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const navigate    = useNavigate()
-  const qc          = useQueryClient()
-  const fileRef     = useRef<HTMLInputElement>(null)
+  const navigate = useNavigate()
   const { user, logout } = useAuth()
+  const isAdmin = user?.role === 'admin'
 
-  const [uploading,  setUploading]  = useState(false)
-  const [error,      setError]      = useState('')
-  const [menuOpen,   setMenuOpen]   = useState(false)
-  const [createOpen, setCreateOpen] = useState(false)
-  // Dismissed "no taqyim" warnings per class-trimester key
-  const [dismissed,  setDismissed]  = useState<Set<string>>(new Set())
+  const [menuOpen, setMenuOpen] = useState(false)
 
   const { data: years = [], isLoading } = useQuery<YearGroup[]>({
     queryKey: ['classes'],
     queryFn:  api.classes.list,
   })
-
-  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setError('')
-    setUploading(true)
-    try {
-      const res = await api.classes.upload(file)
-      await qc.invalidateQueries({ queryKey: ['classes'] })
-      if (res.session_id) navigate(`/sessions/${res.session_id}`)
-      else                navigate(`/classes/${res.id}`)
-    } catch (err: any) {
-      setError(err.message || 'Upload failed')
-    } finally {
-      setUploading(false)
-      e.target.value = ''
-    }
-  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -72,20 +36,20 @@ export default function Dashboard() {
           <div>
             <h1 className="text-xl font-bold text-gray-900">إدارة النقاط</h1>
             <p className="arabic text-sm text-gray-500">
-              {[user?.subject, 'المرحلة الابتدائية'].filter(Boolean).join(' — ')}
+              {isAdmin ? 'لوحة المدير — المرحلة الابتدائية' : 'المرحلة الابتدائية'}
               {user?.full_name && <span className="text-gray-700 font-medium"> · {user.full_name}</span>}
             </p>
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Upload */}
-            <button
-              onClick={() => fileRef.current?.click()}
-              disabled={uploading}
-              className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white px-3 md:px-4 py-2 rounded-lg text-sm font-medium transition"
-            >
-              {uploading ? <><Spinner /> <span className="hidden md:inline arabic">جاري الاستيراد…</span></> : <><UploadIcon /> <span className="hidden md:inline arabic">استيراد PDF</span></>}
-            </button>
+            {isAdmin && (
+              <button
+                onClick={() => navigate('/admin/users')}
+                className="arabic hidden md:flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
+              >
+                🛡️ لوحة المدير
+              </button>
+            )}
 
             {/* Hamburger / nav menu */}
             <div className="relative">
@@ -99,36 +63,16 @@ export default function Dashboard() {
                 <div className="absolute right-0 mt-1 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
                   <button onClick={() => { setMenuOpen(false); navigate('/profile') }}
                           className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 text-right border-b border-gray-100 arabic" dir="rtl">
-                    <span className="text-base">👩‍🏫</span> ملف المعلم
+                    <span className="text-base">👤</span> الملف الشخصي
                   </button>
-                  {user?.role === 'admin' && (
-                    <button onClick={() => { setMenuOpen(false); navigate('/admin') }}
+                  {isAdmin && (
+                    <button onClick={() => { setMenuOpen(false); navigate('/admin/users') }}
                             className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 text-right border-b border-gray-100 arabic" dir="rtl">
-                      <span className="text-base">🛡️</span> إدارة الحسابات
+                      <span className="text-base">🛡️</span> لوحة المدير
                     </button>
                   )}
-                  <button onClick={() => { setMenuOpen(false); setCreateOpen(true) }}
-                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 text-right border-b border-gray-100 arabic" dir="rtl">
-                    <span className="text-base">➕</span> قسم جديد (بدون PDF)
-                  </button>
-                  {years.flatMap(y => y.classes).map(cls => (
-                    <button
-                      key={cls.id}
-                      onClick={() => { setMenuOpen(false); navigate(`/classes/${cls.id}`) }}
-                      className="w-full flex items-center justify-between px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 text-left"
-                    >
-                      <span className="arabic truncate flex-1">{cls.name}</span>
-                      <span className="flex gap-1 ml-2">
-                        {TRIMESTERS.map(t => {
-                          const ts = cls.trimester_status[t]
-                          const dot = trimesterDot(ts, t)
-                          return <span key={t} className={`w-2 h-2 rounded-full ${dot.color}`} title={dot.label} />
-                        })}
-                      </span>
-                    </button>
-                  ))}
                   <button onClick={() => { setMenuOpen(false); navigate('/change-password') }}
-                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 text-right border-t border-gray-100 arabic" dir="rtl">
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-700 hover:bg-gray-50 text-right border-b border-gray-100 arabic" dir="rtl">
                     <span className="text-base">🔑</span> تغيير كلمة المرور
                   </button>
                   <button onClick={() => { setMenuOpen(false); logout(); navigate('/login') }}
@@ -143,201 +87,140 @@ export default function Dashboard() {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 md:px-6 py-6">
-        {error && (
-          <div className="mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">{error}</div>
-        )}
-
-        {isLoading && <div className="flex justify-center py-20"><Spinner large /></div>}
+        {isLoading && <div className="flex justify-center py-20"><Spinner /></div>}
 
         {!isLoading && years.length === 0 && (
-          <div className="text-center py-24 text-gray-400">
-            <div className="text-5xl mb-4">📄</div>
-            <p className="arabic text-lg font-medium text-gray-500">لا توجد أقسام حالياً</p>
-            <p className="arabic text-sm mt-1">استوردوا ملف PDF المُصدَّر من الموقع للبدء.</p>
+          <div className="text-center py-24 text-gray-400" dir="rtl">
+            <div className="text-5xl mb-4">🏫</div>
+            {isAdmin ? (
+              <>
+                <p className="arabic text-lg font-medium text-gray-500">لا توجد أقسام بعد</p>
+                <p className="arabic text-sm mt-1">
+                  أنشئوا الأقسام وأسندوا المعلمين من{' '}
+                  <button onClick={() => navigate('/admin/classes')} className="text-blue-600 underline">لوحة المدير</button>.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="arabic text-lg font-medium text-gray-500">لا أقسام مسندة إليكم بعد</p>
+                <p className="arabic text-sm mt-1">اتصلوا بإدارة المدرسة ليتم إسناد أقسامكم وموادكم.</p>
+              </>
+            )}
           </div>
         )}
 
         {years.map(year => (
           <section key={year.label} className="mb-10">
-            <h2 className="arabic text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">
+            <h2 className="arabic text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 text-right" dir="rtl">
               السنة الدراسية {year.label}
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {year.classes.map(cls => (
-                <ClassCard
-                  key={cls.id}
-                  cls={cls}
-                  dismissed={dismissed}
-                  onDismiss={key => setDismissed(prev => new Set([...prev, key]))}
-                  onClick={() => navigate(`/classes/${cls.id}`)}
-                />
-              ))}
-            </div>
+            {isAdmin ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {year.classes.map(cls => (
+                  <DirectorClassCard key={cls.id} cls={cls} onClick={() => navigate(`/classes/${cls.id}`)} />
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {year.classes.flatMap(cls =>
+                  cls.subjects.map(subj => (
+                    <TeacherSubjectCard
+                      key={`${cls.id}-${subj.subject_id}`}
+                      cls={cls}
+                      subj={subj}
+                      onClick={() => navigate(`/classes/${cls.id}?subject=${subj.subject_id}`)}
+                    />
+                  ))
+                )}
+              </div>
+            )}
           </section>
         ))}
       </main>
 
-      <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={handleFile} />
-
       {/* Close menu on outside click */}
       {menuOpen && <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />}
-
-      {createOpen && (
-        <CreateClassModal
-          onClose={() => setCreateOpen(false)}
-          onCreated={async (id) => {
-            setCreateOpen(false)
-            await qc.invalidateQueries({ queryKey: ['classes'] })
-            navigate(`/classes/${id}`)
-          }}
-        />
-      )}
     </div>
   )
 }
 
-// ── Create class modal (manual, without PDF) ──────────────────────────────────
-function CreateClassModal({ onClose, onCreated }: {
-  onClose: () => void
-  onCreated: (id: string) => void
-}) {
-  const [name,    setName]    = useState('')
-  const [year,    setYear]    = useState(currentSchoolYear())
-  const [saving,  setSaving]  = useState(false)
-  const [error,   setError]   = useState('')
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault()
-    setError('')
-    setSaving(true)
-    try {
-      const res = await api.classes.create(name, year)
-      onCreated(res.id)
-    } catch (err: any) {
-      setError(err.message || 'حدث خطأ')
-      setSaving(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4" onClick={onClose}>
-      <form onSubmit={submit} dir="rtl"
-            className="w-full max-w-sm bg-white rounded-2xl p-6 space-y-4 shadow-xl"
-            onClick={e => e.stopPropagation()}>
-        <h3 className="arabic text-lg font-bold text-gray-900">قسم جديد</h3>
-
-        {error && (
-          <div className="arabic bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-sm">{error}</div>
-        )}
-
-        <div>
-          <label className="arabic block text-sm font-medium text-gray-700 mb-1.5">اسم القسم</label>
-          <input
-            type="text" value={name} onChange={e => setName(e.target.value)} autoFocus
-            placeholder="مثال: السنة الخامسة أ"
-            className="arabic w-full border border-gray-200 rounded-xl px-4 py-2.5 text-right focus:outline-none focus:ring-2 focus:ring-blue-400"
-          />
-        </div>
-
-        <div>
-          <label className="arabic block text-sm font-medium text-gray-700 mb-1.5">السنة الدراسية</label>
-          <input
-            type="text" value={year} onChange={e => setYear(e.target.value)} dir="ltr"
-            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400"
-          />
-        </div>
-
-        <p className="arabic text-xs text-gray-400">يمكنكم إضافة التلاميذ يدوياً بعد إنشاء القسم.</p>
-
-        <div className="flex gap-2">
-          <button type="submit" disabled={saving || !name.trim() || !year.trim()}
-                  className="arabic flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-xl text-sm font-medium">
-            {saving ? 'جاري الإنشاء…' : 'إنشاء'}
-          </button>
-          <button type="button" onClick={onClose}
-                  className="arabic px-5 py-2.5 text-sm text-gray-500 hover:text-gray-700">
-            إلغاء
-          </button>
-        </div>
-      </form>
-    </div>
-  )
-}
-
-// ── Class card ─────────────────────────────────────────────────────────────────
-function ClassCard({ cls, dismissed, onDismiss, onClick }: {
+// ── Teacher card: one (class × subject) ───────────────────────────────────────
+function TeacherSubjectCard({ cls, subj, onClick }: {
   cls: ClassSummary
-  dismissed: Set<string>
-  onDismiss: (key: string) => void
+  subj: ClassSubjectStatus
   onClick: () => void
 }) {
-  // Warnings: امتحان exists but no تقييم for this trimester
-  const warnings = TRIMESTERS.filter(t => {
-    const ts = cls.trimester_status[t]
-    return ts && hasImtihanWithoutTaqyim(ts) && !dismissed.has(`${cls.id}-${t}`)
-  })
-
+  const doneCount = Object.values(subj.trimester_status).filter(s => s.imtihan_finalized).length
   return (
-    <div className="bg-white border border-gray-200 hover:border-blue-400 hover:shadow-md rounded-xl overflow-hidden transition group">
-      {/* Warning banners */}
-      {warnings.map(t => (
-        <div key={t} className="flex items-center justify-between bg-amber-50 border-b border-amber-200 px-3 py-1.5 text-xs text-amber-700" dir="rtl">
-          <span className="arabic">⚠ الثلاثي {t} : امتحان بدون تقييم</span>
-          <button
-            onClick={e => { e.stopPropagation(); onDismiss(`${cls.id}-${t}`) }}
-            className="text-amber-500 hover:text-amber-700 mr-2 font-bold"
-            title="تجاهل"
-          >✕</button>
-        </div>
-      ))}
+    <button
+      onClick={onClick}
+      className="bg-white border border-gray-200 hover:border-blue-400 hover:shadow-md rounded-xl p-5 text-right transition group"
+      dir="rtl"
+    >
+      <div className="flex items-start justify-between mb-1">
+        <span className="arabic text-lg font-bold text-gray-900 group-hover:text-blue-700">{cls.name}</span>
+        {cls.level && <span className="arabic text-xs text-gray-400">{cls.level}</span>}
+      </div>
+      <p className="arabic text-sm text-blue-600 font-medium mb-3">{subj.name}</p>
 
-      {/* Card body */}
-      <button className="w-full text-left p-5" onClick={onClick}>
-        <div className="flex items-start justify-between mb-3">
-          <span className="arabic text-lg font-bold text-gray-900 group-hover:text-blue-700">
-            {cls.name}
-          </span>
-        </div>
+      <div className="flex items-center gap-3 mb-3">
+        {TRIMESTERS.map(t => (
+          <div key={t} className="flex items-center gap-1.5">
+            <div className={`w-2.5 h-2.5 rounded-full ${trimesterDot(subj.trimester_status[t])}`} />
+            <span className="text-xs text-gray-500">T{t}</span>
+          </div>
+        ))}
+        <span className="arabic mr-auto text-xs text-gray-400">{doneCount}/3 مكتمل</span>
+      </div>
 
-        {cls.teacher && <p className="arabic text-sm text-gray-500 mb-3">{cls.teacher}</p>}
+      <div className="flex gap-4 text-xs text-gray-400">
+        <span className="arabic">{cls.student_count} تلميذ</span>
+        <span className="arabic">{subj.session_count} جلسة</span>
+      </div>
+    </button>
+  )
+}
 
-        {/* Trimester progress dots */}
-        <div className="flex items-center gap-3 mb-3">
-          {TRIMESTERS.map(t => {
-            const ts  = cls.trimester_status[t]
-            const dot = trimesterDot(ts, t)
+// ── Director card: class with subject chips ───────────────────────────────────
+function DirectorClassCard({ cls, onClick }: {
+  cls: ClassSummary
+  onClick: () => void
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="bg-white border border-gray-200 hover:border-blue-400 hover:shadow-md rounded-xl p-5 text-right transition group"
+      dir="rtl"
+    >
+      <div className="flex items-start justify-between mb-1">
+        <span className="arabic text-lg font-bold text-gray-900 group-hover:text-blue-700">{cls.name}</span>
+        {cls.level && <span className="arabic text-xs text-gray-400">{cls.level}</span>}
+      </div>
+      <p className="arabic text-xs text-gray-400 mb-3">{cls.student_count} تلميذ · {cls.session_count} جلسة</p>
+
+      {cls.subjects.length === 0 ? (
+        <p className="arabic text-xs text-amber-600">⚠ لا معلم مسند — أسندوا من لوحة المدير</p>
+      ) : (
+        <div className="flex flex-wrap gap-1.5">
+          {cls.subjects.map(s => {
+            const done = Object.values(s.trimester_status).filter(x => x.imtihan_finalized).length
             return (
-              <div key={t} className="flex items-center gap-1.5">
-                <div className={`w-2.5 h-2.5 rounded-full ${dot.color}`} />
-                <span className="text-xs text-gray-500">T{t}</span>
-              </div>
+              <span key={s.subject_id}
+                    className="arabic inline-flex items-center gap-1 text-xs bg-gray-50 border border-gray-200 text-gray-600 px-2 py-1 rounded-full">
+                {s.name}
+                <span className={`w-1.5 h-1.5 rounded-full ${done === 3 ? 'bg-green-500' : done > 0 ? 'bg-amber-400' : 'bg-gray-300'}`} />
+              </span>
             )
           })}
-          <span className="arabic ml-auto text-xs text-gray-400">
-            {Object.values(cls.trimester_status).filter(s => s.imtihan_finalized).length}/3 مكتمل
-          </span>
         </div>
-
-        <div className="flex gap-4 text-xs text-gray-400">
-          <span className="arabic">{cls.student_count} تلميذ</span>
-          <span className="arabic">{cls.session_count} جلسة</span>
-        </div>
-      </button>
-    </div>
+      )}
+    </button>
   )
 }
 
-// ── Icons ──────────────────────────────────────────────────────────────────────
-function UploadIcon() {
+function Spinner() {
   return (
-    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1M12 12V4m0 0L8 8m4-4l4 4" />
-    </svg>
-  )
-}
-function Spinner({ large = false }: { large?: boolean }) {
-  return (
-    <svg className={`animate-spin ${large ? 'w-8 h-8 text-blue-500' : 'w-4 h-4'}`} fill="none" viewBox="0 0 24 24">
+    <svg className="animate-spin w-8 h-8 text-blue-500" fill="none" viewBox="0 0 24 24">
       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
       <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
     </svg>

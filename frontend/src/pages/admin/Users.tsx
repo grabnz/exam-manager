@@ -1,120 +1,65 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, UserRow, YearGroup } from '../api/client'
-import { useAuth } from '../auth'
+import { api, UserRow } from '../../api/client'
+import { useAuth } from '../../auth'
 
-export default function Admin() {
-  const navigate = useNavigate()
-  const qc       = useQueryClient()
+export default function Users() {
+  const qc = useQueryClient()
   const { user: me } = useAuth()
+  const [error, setError] = useState('')
 
   const { data: users = [], isLoading } = useQuery<UserRow[]>({
     queryKey: ['users'],
     queryFn:  api.users.list,
   })
-  const { data: years = [] } = useQuery<YearGroup[]>({
-    queryKey: ['classes'],
-    queryFn:  api.classes.list,
-  })
-
-  const [error, setError] = useState('')
-
-  const allClasses = years.flatMap(y => y.classes.map(c => ({ ...c, year: y.label })))
-  const teachers = users.filter(u => u.is_active)
 
   async function run(fn: () => Promise<unknown>) {
     setError('')
     try {
       await fn()
       await qc.invalidateQueries({ queryKey: ['users'] })
-      await qc.invalidateQueries({ queryKey: ['classes'] })
     } catch (err: any) {
       setError(err.message || 'حدث خطأ')
     }
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-4 md:px-6 py-4">
-        <button onClick={() => navigate('/')}
-                className="text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1 mb-3">
-          ← الرئيسية
-        </button>
-        <h1 className="arabic text-xl font-bold text-gray-900">إدارة الحسابات</h1>
-        <p className="arabic text-sm text-gray-500 mt-1">إنشاء حسابات المعلمين وإدارتها — خاص بالإدارة</p>
-      </header>
+    <div className="space-y-6">
+      {error && (
+        <div className="arabic bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm text-right" dir="rtl">
+          {error}
+        </div>
+      )}
 
-      <main className="max-w-3xl mx-auto px-4 md:px-6 py-6 space-y-8">
-        {error && (
-          <div className="arabic bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm text-right" dir="rtl">
-            {error}
+      <CreateUserForm onCreate={(data) => run(() => api.users.create(data))} />
+
+      <section>
+        <h2 className="arabic text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 text-right" dir="rtl">
+          الحسابات ({users.length})
+        </h2>
+        {isLoading ? (
+          <div className="text-center py-10 text-gray-400">…</div>
+        ) : (
+          <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
+            {users.map(u => (
+              <UserItem
+                key={u.id}
+                user={u}
+                isMe={u.id === me?.id}
+                onToggleActive={() => run(() => api.users.update(u.id, { is_active: !u.is_active }))}
+                onResetPassword={() => {
+                  const pw = window.prompt('كلمة المرور المؤقتة الجديدة (6 أحرف على الأقل):')
+                  if (pw) run(() => api.users.resetPassword(u.id, pw))
+                }}
+                onDelete={() => {
+                  if (window.confirm(`حذف حساب "${u.username}" نهائياً؟ (تبقى الأعداد والأقسام محفوظة)`))
+                    run(() => api.users.delete(u.id))
+                }}
+              />
+            ))}
           </div>
         )}
-
-        <CreateUserForm onCreate={(data) => run(() => api.users.create(data))} />
-
-        {/* Users list */}
-        <section>
-          <h2 className="arabic text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 text-right" dir="rtl">
-            الحسابات ({users.length})
-          </h2>
-          {isLoading ? (
-            <div className="text-center py-10 text-gray-400">…</div>
-          ) : (
-            <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
-              {users.map(u => (
-                <UserItem
-                  key={u.id}
-                  user={u}
-                  isMe={u.id === me?.id}
-                  onToggleActive={() => run(() => api.users.update(u.id, { is_active: !u.is_active }))}
-                  onResetPassword={() => {
-                    const pw = window.prompt('كلمة المرور المؤقتة الجديدة (6 أحرف على الأقل):')
-                    if (pw) run(() => api.users.resetPassword(u.id, pw))
-                  }}
-                  onDelete={() => {
-                    if (window.confirm(`حذف حساب "${u.username}" نهائياً؟`))
-                      run(() => api.users.delete(u.id))
-                  }}
-                />
-              ))}
-            </div>
-          )}
-        </section>
-
-        {/* Class ownership */}
-        {allClasses.length > 0 && (
-          <section>
-            <h2 className="arabic text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 text-right" dir="rtl">
-              إسناد الأقسام ({allClasses.length})
-            </h2>
-            <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
-              {allClasses.map(c => (
-                <div key={c.id} className="flex items-center justify-between gap-3 px-4 py-3" dir="rtl">
-                  <div className="min-w-0">
-                    <span className="arabic text-sm font-medium text-gray-800">{c.name}</span>
-                    <span className="arabic text-xs text-gray-400 mr-2">{c.year}</span>
-                    {!c.owner_id && (
-                      <span className="arabic text-xs bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full mr-2">بدون معلم</span>
-                    )}
-                  </div>
-                  <select
-                    value={c.owner_id ?? ''}
-                    onChange={e => run(() => api.classes.assignOwner(c.id, e.target.value || null))}
-                    className="arabic text-sm border border-gray-200 rounded-lg px-2 py-1.5 flex-shrink-0"
-                  >
-                    <option value="">— بدون معلم —</option>
-                    {teachers.map(t => (
-                      <option key={t.id} value={t.id}>{t.full_name || t.username}</option>
-                    ))}
-                  </select>
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
-      </main>
+      </section>
     </div>
   )
 }
@@ -229,7 +174,7 @@ function UserItem({ user, isMe, onToggleActive, onResetPassword, onDelete }: {
             <span className="arabic text-xs bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full">كلمة مرور مؤقتة</span>
           )}
         </div>
-        <span className="arabic text-xs text-gray-400">{user.class_count} قسم</span>
+        <span className="arabic text-xs text-gray-400">{user.class_count} قسم مسند</span>
       </div>
 
       <div className="flex items-center gap-1.5 flex-shrink-0">
@@ -243,12 +188,10 @@ function UserItem({ user, isMe, onToggleActive, onResetPassword, onDelete }: {
                     className="arabic text-xs text-gray-500 hover:text-amber-600 border border-gray-200 hover:border-amber-300 px-2 py-1 rounded-lg">
               {user.is_active ? 'تعطيل' : 'تفعيل'}
             </button>
-            {user.class_count === 0 && (
-              <button onClick={onDelete}
-                      className="text-xs text-gray-400 hover:text-red-500 border border-gray-200 hover:border-red-300 px-2 py-1 rounded-lg">
-                ✕
-              </button>
-            )}
+            <button onClick={onDelete}
+                    className="text-xs text-gray-400 hover:text-red-500 border border-gray-200 hover:border-red-300 px-2 py-1 rounded-lg">
+              ✕
+            </button>
           </>
         )}
       </div>

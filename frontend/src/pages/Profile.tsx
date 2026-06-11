@@ -11,14 +11,6 @@ const GRADES = [
   'متفقد تربية',
 ]
 
-const SUBJECTS = [
-  'اللغة الفرنسية',
-  'اللغة العربية',
-  'الرياضيات',
-  'الإيقاظ العلمي',
-  'اللغة الإنجليزية',
-]
-
 export default function Profile() {
   const navigate = useNavigate()
   const { user, updateUser } = useAuth()
@@ -78,55 +70,6 @@ export default function Profile() {
                 className="arabic w-full border border-gray-200 rounded-xl px-4 py-2.5 text-right focus:outline-none focus:ring-2 focus:ring-blue-400"
                 dir="rtl"
               />
-            </div>
-
-            {/* Subject / المادة */}
-            <div>
-              <label className="arabic block text-sm font-medium text-gray-700 mb-1.5">
-                المادة
-              </label>
-              <div className="grid grid-cols-2 gap-2" dir="rtl">
-                {SUBJECTS.map(s => (
-                  <label key={s}
-                         className={`arabic flex items-center gap-2 px-3 py-2 rounded-xl border cursor-pointer transition text-sm ${
-                           form.subject === s
-                             ? 'border-blue-400 bg-blue-50 text-blue-700'
-                             : 'border-gray-200 hover:bg-gray-50'
-                         }`}>
-                    <input
-                      type="radio"
-                      name="subject"
-                      value={s}
-                      checked={form.subject === s}
-                      onChange={() => setForm(f => ({ ...f, subject: s }))}
-                      className="accent-blue-600"
-                    />
-                    <span>{s}</span>
-                  </label>
-                ))}
-                {/* Custom subject */}
-                <div className={`flex items-center gap-2 px-3 py-2 rounded-xl border transition ${
-                  form.subject && !SUBJECTS.includes(form.subject)
-                    ? 'border-blue-400 bg-blue-50' : 'border-gray-200'
-                }`}>
-                  <input
-                    type="radio"
-                    name="subject"
-                    checked={!SUBJECTS.includes(form.subject) && form.subject !== ''}
-                    onChange={() => {}}
-                    className="accent-blue-600 flex-shrink-0"
-                  />
-                  <input
-                    type="text"
-                    placeholder="أخرى…"
-                    value={!SUBJECTS.includes(form.subject) ? form.subject : ''}
-                    onFocus={() => { if (SUBJECTS.includes(form.subject)) setForm(f => ({ ...f, subject: '' })) }}
-                    onChange={e => setForm(f => ({ ...f, subject: e.target.value }))}
-                    className="arabic flex-1 bg-transparent text-sm focus:outline-none text-right min-w-0"
-                    dir="rtl"
-                  />
-                </div>
-              </div>
             </div>
 
             {/* Grade / رتبة */}

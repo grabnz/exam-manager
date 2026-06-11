@@ -17,7 +17,7 @@ from .database import engine, SessionLocal
 from .models import (
     SchemaMigration, SchoolSettings, Subject,
     GridTemplate, GridSection, GridCriterion,
-    ExamSession,
+    ExamSession, Class, TeacherAssignment, User,
 )
 
 # ── Additive column migrations ───────────────────────────────────────────────
@@ -201,6 +201,26 @@ def _seed_school_settings(db):
         db.add(SchoolSettings(id=1))
 
 
+def _backfill_assignments(db):
+    """Convert legacy class ownership into (teacher, class, français)
+    assignments. Classes owned by an admin (or unowned) stay unassigned —
+    the director assigns them from the console."""
+    francais = db.query(Subject).filter_by(code="francais").first()
+    classes = db.query(Class).filter(Class.owner_id.isnot(None)).all()
+    for c in classes:
+        owner = db.get(User, c.owner_id)
+        if not owner or owner.role != "teacher":
+            continue
+        exists = db.query(TeacherAssignment).filter_by(
+            teacher_id=owner.id, class_id=c.id, subject_id=francais.id
+        ).first()
+        if not exists:
+            db.add(TeacherAssignment(
+                teacher_id=owner.id, class_id=c.id, subject_id=francais.id
+            ))
+    db.flush()
+
+
 def run_data_migrations():
     db = SessionLocal()
     try:
@@ -212,6 +232,7 @@ def run_data_migrations():
         _once(db, "backfill_sessions_subject_v1", _backfill_sessions_subject)
         _once(db, "unique_index_sessions_v1", _swap_sessions_unique_index)
         _once(db, "seed_school_settings_v1", _seed_school_settings)
+        _once(db, "backfill_assignments_v1", _backfill_assignments)
     finally:
         if engine.dialect.name == "postgresql":
             try:

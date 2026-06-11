@@ -1,8 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from ..database import get_db
-from ..models import SchoolYear, Class, Student, ExamSession, StudentScore, User
-from ..schemas import ClassCreate, ClassUpdate, ClassOwnerUpdate, StudentCreate, StudentUpdate
+from ..models import (
+    SchoolYear, Class, Student, ExamSession, User,
+    Subject, GridTemplate, TeacherAssignment,
+)
+from ..schemas import ClassCreate, ClassUpdate, StudentCreate, StudentUpdate
 from ..services.pdf_parser import parse_pdf
 from ..auth import get_current_user, require_admin
 
@@ -11,9 +14,16 @@ students_router = APIRouter(prefix="/api/students", tags=["students"])
 
 
 def get_visible_class(db: Session, user: User, class_id: str) -> Class:
-    """A teacher can only access their own classes; an admin can access all."""
+    """Director sees all classes; a teacher only classes they are assigned to."""
     c = db.query(Class).filter_by(id=class_id).first()
-    if not c or (user.role != "admin" and c.owner_id != user.id):
+    if not c:
+        raise HTTPException(404, "Class not found")
+    if user.role == "admin":
+        return c
+    assigned = db.query(TeacherAssignment).filter_by(
+        teacher_id=user.id, class_id=class_id
+    ).first()
+    if not assigned:
         raise HTTPException(404, "Class not found")
     return c
 
@@ -27,10 +37,28 @@ def _get_or_create_year(db: Session, label: str) -> SchoolYear:
     return year
 
 
+def _trimester_status(sessions) -> dict:
+    """Per-trimester progress for a list of sessions (one class+subject)."""
+    status = {}
+    for s in sessions:
+        t = s.trimester
+        if t not in status:
+            status[t] = {"has_taqyim": False, "imtihan_finalized": False, "imtihan_exists": False}
+        if s.exam_type == "امتحان":
+            status[t]["imtihan_exists"] = True
+            if s.is_finalized:
+                status[t]["imtihan_finalized"] = True
+        elif s.exam_type.startswith("تقييم"):
+            status[t]["has_taqyim"] = True
+    return status
+
+
+# ── Class creation (director) ────────────────────────────────────────────────
+
 @router.post("/upload")
 async def upload_pdf(
     file: UploadFile = File(...),
-    user: User = Depends(get_current_user),
+    admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     content = await file.read()
@@ -46,7 +74,6 @@ async def upload_pdf(
 
     class_ = Class(
         school_year_id=school_year.id,
-        owner_id=user.id,
         name=meta.get("class_name") or "Unknown",
         teacher=meta.get("teacher"),
     )
@@ -56,11 +83,19 @@ async def upload_pdf(
     for i, name in enumerate(students):
         db.add(Student(class_id=class_.id, full_name=name, order_index=i))
 
-    # Auto-create exam session if PDF contains trimester + exam type
+    # The school-site PDF is the French exam sheet → auto-create the session
     session_id = None
     if meta.get("trimester") and meta.get("exam_type"):
+        subject = db.query(Subject).filter_by(code="francais").first()
+        template = (
+            db.query(GridTemplate)
+            .filter_by(subject_id=subject.id, is_builtin=True, is_active=True)
+            .first()
+        )
         sess = ExamSession(
             class_id=class_.id,
+            subject_id=subject.id,
+            template_id=template.id if template else None,
             trimester=meta["trimester"],
             exam_type=meta["exam_type"],
         )
@@ -81,7 +116,7 @@ async def upload_pdf(
 @router.post("")
 def create_class(
     body: ClassCreate,
-    user: User = Depends(get_current_user),
+    admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     name = body.name.strip()
@@ -89,50 +124,65 @@ def create_class(
     if not name or not year_label:
         raise HTTPException(400, "الاسم والسنة الدراسية مطلوبان")
     school_year = _get_or_create_year(db, year_label)
-    class_ = Class(school_year_id=school_year.id, owner_id=user.id, name=name)
+    class_ = Class(school_year_id=school_year.id, name=name,
+                   level=(body.level or "").strip() or None)
     db.add(class_)
     db.commit()
     return {"id": class_.id, "name": class_.name, "school_year": school_year.label}
 
 
+# ── Listing ──────────────────────────────────────────────────────────────────
+
 @router.get("")
 def list_classes(user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    is_admin = user.role == "admin"
+
+    # teacher: subjects per class from assignments; director: all
+    my_assignments = {}
+    if not is_admin:
+        for a in db.query(TeacherAssignment).filter_by(teacher_id=user.id).all():
+            my_assignments.setdefault(a.class_id, []).append(a.subject)
+
     years = db.query(SchoolYear).order_by(SchoolYear.label.desc()).all()
     result = []
     for year in years:
         classes = []
         for c in year.classes:
-            if user.role != "admin" and c.owner_id != user.id:
+            if not is_admin and c.id not in my_assignments:
                 continue
-            score_count = (
-                db.query(StudentScore)
-                .join(ExamSession, StudentScore.session_id == ExamSession.id)
-                .filter(ExamSession.class_id == c.id)
-                .count()
-            )
-            # Trimester progress: for each trimester, is the امتحان finalized?
-            trimester_status = {}
-            for s in c.sessions:
-                t = s.trimester
-                if t not in trimester_status:
-                    trimester_status[t] = {"has_taqyim": False, "imtihan_finalized": False, "imtihan_exists": False}
-                if s.exam_type == "امتحان":
-                    trimester_status[t]["imtihan_exists"] = True
-                    if s.is_finalized:
-                        trimester_status[t]["imtihan_finalized"] = True
-                elif s.exam_type.startswith("تقييم"):
-                    trimester_status[t]["has_taqyim"] = True
+
+            if is_admin:
+                # all subjects with an assignment or an existing session
+                subj_map = {a.subject.id: a.subject for a in c.assignments}
+                for s in c.sessions:
+                    if s.subject:
+                        subj_map.setdefault(s.subject.id, s.subject)
+                subjects = sorted(subj_map.values(), key=lambda s: s.order_index)
+            else:
+                subjects = sorted(my_assignments[c.id], key=lambda s: s.order_index)
+
+            subject_items = []
+            for subj in subjects:
+                subj_sessions = [s for s in c.sessions if s.subject_id == subj.id]
+                teachers = [a.teacher.full_name or a.teacher.username
+                            for a in c.assignments if a.subject_id == subj.id]
+                subject_items.append({
+                    "subject_id":       subj.id,
+                    "code":             subj.code,
+                    "name":             subj.name_ar,
+                    "session_count":    len(subj_sessions),
+                    "trimester_status": _trimester_status(subj_sessions),
+                    "teachers":         teachers,
+                })
 
             classes.append({
-                "id":               c.id,
-                "name":             c.name,
-                "teacher":          c.teacher,
-                "owner_id":         c.owner_id,
-                "owner_name":       c.owner.full_name or c.owner.username if c.owner else None,
-                "student_count":    len(c.students),
-                "session_count":    len(c.sessions),
-                "has_scores":       score_count > 0,
-                "trimester_status": trimester_status,  # {1: {has_taqyim, imtihan_finalized, imtihan_exists}, ...}
+                "id":            c.id,
+                "name":          c.name,
+                "level":         c.level,
+                "teacher":       c.teacher,   # legacy free-text
+                "student_count": len(c.students),
+                "session_count": len(c.sessions),
+                "subjects":      subject_items,
             })
         if classes:
             result.append({"label": year.label, "classes": classes})
@@ -146,20 +196,42 @@ def get_class(class_id: str, user: User = Depends(get_current_user), db: Session
     sessions = [
         {
             "id":           s.id,
+            "subject_id":   s.subject_id,
             "trimester":    s.trimester,
             "exam_type":    s.exam_type,
-            "has_scores":   len(s.scores) > 0,
+            "has_scores":   len(s.scores) > 0 or len(s.entries) > 0,
             "is_finalized": s.is_finalized,
         }
         for s in c.sessions
     ]
 
+    if user.role == "admin":
+        my_subjects = sorted({a.subject for a in c.assignments}, key=lambda s: s.order_index)
+    else:
+        my_subjects = sorted(
+            (a.subject for a in c.assignments if a.teacher_id == user.id),
+            key=lambda s: s.order_index,
+        )
+
     return {
         "id":          c.id,
         "name":        c.name,
+        "level":       c.level,
         "teacher":     c.teacher,
         "school_year": c.school_year.label,
-        "students":    [
+        "is_admin":    user.role == "admin",
+        "my_subjects": [{"id": s.id, "code": s.code, "name": s.name_ar} for s in my_subjects],
+        "assignments": [
+            {
+                "id":           a.id,
+                "teacher_id":   a.teacher_id,
+                "teacher_name": a.teacher.full_name or a.teacher.username,
+                "subject_id":   a.subject_id,
+                "subject_name": a.subject.name_ar,
+            }
+            for a in c.assignments
+        ],
+        "students": [
             {"id": s.id, "full_name": s.full_name, "order_index": s.order_index}
             for s in c.students
         ],
@@ -171,40 +243,28 @@ def get_class(class_id: str, user: User = Depends(get_current_user), db: Session
 def update_class(
     class_id: str,
     body: ClassUpdate,
-    user: User = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    c = get_visible_class(db, user, class_id)
-    if body.name is not None:
-        name = body.name.strip()
-        if not name:
-            raise HTTPException(400, "الاسم لا يمكن أن يكون فارغاً")
-        c.name = name
-    db.commit()
-    return {"ok": True, "name": c.name}
-
-
-@router.patch("/{class_id}/owner")
-def assign_class_owner(
-    class_id: str,
-    body: ClassOwnerUpdate,
     admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     c = db.query(Class).filter_by(id=class_id).first()
     if not c:
         raise HTTPException(404, "Class not found")
-    if body.owner_id is not None:
-        if not db.query(User).filter_by(id=body.owner_id).first():
-            raise HTTPException(404, "User not found")
-    c.owner_id = body.owner_id
+    if body.name is not None:
+        name = body.name.strip()
+        if not name:
+            raise HTTPException(400, "الاسم لا يمكن أن يكون فارغاً")
+        c.name = name
+    if body.level is not None:
+        c.level = body.level.strip() or None
     db.commit()
-    return {"ok": True}
+    return {"ok": True, "name": c.name}
 
 
 @router.delete("/{class_id}")
-def delete_class(class_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    c = get_visible_class(db, user, class_id)
+def delete_class(class_id: str, admin: User = Depends(require_admin), db: Session = Depends(get_db)):
+    c = db.query(Class).filter_by(id=class_id).first()
+    if not c:
+        raise HTTPException(404, "Class not found")
     if any(s.is_finalized for s in c.sessions):
         raise HTTPException(400, "القسم يحتوي على امتحانات نهائية مقفلة. ألغوا القفل أولاً.")
     db.delete(c)
@@ -212,16 +272,18 @@ def delete_class(class_id: str, user: User = Depends(get_current_user), db: Sess
     return {"ok": True}
 
 
-# ── Students ─────────────────────────────────────────────────────────────────
+# ── Students (director) ──────────────────────────────────────────────────────
 
 @router.post("/{class_id}/students")
 def add_student(
     class_id: str,
     body: StudentCreate,
-    user: User = Depends(get_current_user),
+    admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    c = get_visible_class(db, user, class_id)
+    c = db.query(Class).filter_by(id=class_id).first()
+    if not c:
+        raise HTTPException(404, "Class not found")
     name = body.full_name.strip()
     if not name:
         raise HTTPException(400, "اسم التلميذ مطلوب")
@@ -232,21 +294,16 @@ def add_student(
     return {"id": student.id, "full_name": student.full_name, "order_index": student.order_index}
 
 
-def _get_visible_student(db: Session, user: User, student_id: str) -> Student:
-    s = db.query(Student).filter_by(id=student_id).first()
-    if not s or (user.role != "admin" and s.class_.owner_id != user.id):
-        raise HTTPException(404, "Student not found")
-    return s
-
-
 @students_router.patch("/{student_id}")
 def rename_student(
     student_id: str,
     body: StudentUpdate,
-    user: User = Depends(get_current_user),
+    admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    s = _get_visible_student(db, user, student_id)
+    s = db.query(Student).filter_by(id=student_id).first()
+    if not s:
+        raise HTTPException(404, "Student not found")
     name = body.full_name.strip()
     if not name:
         raise HTTPException(400, "اسم التلميذ مطلوب")
@@ -258,10 +315,12 @@ def rename_student(
 @students_router.delete("/{student_id}")
 def delete_student(
     student_id: str,
-    user: User = Depends(get_current_user),
+    admin: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    s = _get_visible_student(db, user, student_id)
+    s = db.query(Student).filter_by(id=student_id).first()
+    if not s:
+        raise HTTPException(404, "Student not found")
     db.delete(s)
     db.commit()
     return {"ok": True}

@@ -28,10 +28,14 @@ def _user_row(u: User, class_count: int) -> dict:
     }
 
 
+def _assigned_class_count(u: User) -> int:
+    return len({a.class_id for a in u.assignments})
+
+
 @router.get("")
 def list_users(admin: User = Depends(require_admin), db: Session = Depends(get_db)):
     users = db.query(User).order_by(User.created_at).all()
-    return [_user_row(u, len(u.classes)) for u in users]
+    return [_user_row(u, _assigned_class_count(u)) for u in users]
 
 
 @router.post("")
@@ -72,7 +76,7 @@ def update_user(user_id: str, body: UserUpdate, admin: User = Depends(require_ad
     if body.is_active is not None:
         user.is_active = body.is_active
     db.commit()
-    return _user_row(user, len(user.classes))
+    return _user_row(user, _assigned_class_count(user))
 
 
 @router.post("/{user_id}/reset-password")
@@ -95,8 +99,10 @@ def delete_user(user_id: str, admin: User = Depends(require_admin), db: Session 
         raise HTTPException(404)
     if user.id == admin.id:
         raise HTTPException(400, "لا يمكن حذف حسابكم الخاص")
-    if user.classes:
-        raise HTTPException(400, "هذا المستخدم له أقسام. أعيدوا إسنادها أولاً.")
+    # Assignments cascade-delete with the user; sessions/scores stay with the
+    # class. Clear legacy ownership references to satisfy the FK.
+    for c in user.classes:
+        c.owner_id = None
     db.delete(user)
     db.commit()
     return {"ok": True}

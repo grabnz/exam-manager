@@ -66,29 +66,49 @@ export interface TrimesterStatus {
   imtihan_exists: boolean
   imtihan_finalized: boolean
 }
-export interface ClassSummary {
-  id: string; name: string; teacher?: string
-  owner_id?: string | null; owner_name?: string | null
-  student_count: number; session_count: number; has_scores: boolean
+export interface Subject {
+  id: string; code: string; name_ar: string; name_fr?: string | null
+  order_index: number; is_active: boolean
+}
+export interface ClassSubjectStatus {
+  subject_id: string; code: string; name: string
+  session_count: number
   trimester_status: Record<string, TrimesterStatus>
+  teachers: string[]
+}
+export interface ClassSummary {
+  id: string; name: string; level?: string | null; teacher?: string
+  student_count: number; session_count: number
+  subjects: ClassSubjectStatus[]
 }
 export interface YearGroup { label: string; classes: ClassSummary[] }
 
 export interface Student { id: string; full_name: string; order_index: number }
 export interface SessionSummary {
-  id: string; trimester: number; exam_type: string
+  id: string; subject_id?: string | null; trimester: number; exam_type: string
   has_scores: boolean; is_finalized: boolean
 }
+export interface AssignmentRow {
+  id: string; teacher_id: string; teacher_name: string
+  class_id: string; class_name: string; school_year: string
+  subject_id: string; subject_name: string
+}
+export interface SettingsData { school_name: string; active_year: string; region: string }
 
 export interface TeacherProfile { name: string; grade: string; subject: string }
 export interface ClassDetail {
-  id: string; name: string; teacher?: string; school_year: string
+  id: string; name: string; level?: string | null; teacher?: string; school_year: string
+  is_admin: boolean
+  my_subjects: { id: string; code: string; name: string }[]
+  assignments: { id: string; teacher_id: string; teacher_name: string; subject_id: string; subject_name: string }[]
   students: Student[]; sessions: SessionSummary[]
 }
 
 export interface SessionInfo {
   id: string; trimester: number; exam_type: string; is_finalized: boolean
   class_id: string; class_name: string; school_year: string; teacher?: string
+  subject_id?: string | null; subject_name?: string | null; template_id?: string | null
+  is_admin: boolean
 }
 
 export type ScoreRow = {
@@ -147,26 +167,41 @@ export const api = {
       }),
     delete: (id: string) => req<{ ok: boolean }>(`/users/${id}`, { method: 'DELETE' }),
   },
+  subjects: {
+    list: () => req<Subject[]>('/subjects'),
+  },
+  assignments: {
+    list: () => req<AssignmentRow[]>('/assignments'),
+    create: (teacherId: string, classId: string, subjectIds: string[]) =>
+      req<AssignmentRow[]>('/assignments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ teacher_id: teacherId, class_id: classId, subject_ids: subjectIds }),
+      }),
+    delete: (id: string) => req<{ ok: boolean }>(`/assignments/${id}`, { method: 'DELETE' }),
+  },
+  settings: {
+    get: () => req<SettingsData>('/settings'),
+    save: (data: SettingsData) => req<SettingsData>('/settings', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    }),
+  },
   classes: {
     list:   ()           => req<YearGroup[]>('/classes'),
     get:    (id: string) => req<ClassDetail>(`/classes/${id}`),
-    create: (name: string, schoolYear: string) =>
+    create: (name: string, schoolYear: string, level?: string) =>
       req<{ id: string; name: string; school_year: string }>('/classes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, school_year: schoolYear }),
+        body: JSON.stringify({ name, school_year: schoolYear, level: level || null }),
       }),
     rename: (id: string, name: string) =>
       req<{ ok: boolean; name: string }>(`/classes/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
-      }),
-    assignOwner: (id: string, ownerId: string | null) =>
-      req<{ ok: boolean }>(`/classes/${id}/owner`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ owner_id: ownerId }),
       }),
     delete: (id: string) => req<void>(`/classes/${id}`, { method: 'DELETE' }),
     upload: (file: File) => {
@@ -194,11 +229,11 @@ export const api = {
   },
   sessions: {
     get:    (id: string) => req<SessionInfo>(`/sessions/${id}`),
-    create: (classId: string, trimester: number, examType: string) =>
+    create: (classId: string, trimester: number, examType: string, subjectId?: string) =>
       req<{ id: string }>(`/classes/${classId}/sessions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trimester, exam_type: examType }),
+        body: JSON.stringify({ trimester, exam_type: examType, subject_id: subjectId || null }),
       }),
     delete:   (id: string) => req<void>(`/sessions/${id}`, { method: 'DELETE' }),
     finalize: (id: string, finalized: boolean) =>

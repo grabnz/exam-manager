@@ -8,14 +8,14 @@ from ..models import StudentScore, User
 from ..schemas import ScoresSave, SCORE_FIELDS
 from ..services.excel_export import export_session
 from ..auth import get_current_user
-from .sessions import get_visible_session
+from .sessions import get_accessible_session
 
 router = APIRouter(prefix="/api/sessions", tags=["scores"])
 
 
 @router.get("/{session_id}/scores")
 def get_scores(session_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    s = get_visible_session(db, user, session_id)
+    s = get_accessible_session(db, user, session_id)
 
     scores_map = {sc.student_id: sc for sc in s.scores}
     result = []
@@ -34,7 +34,7 @@ def get_scores(session_id: str, user: User = Depends(get_current_user), db: Sess
 
 @router.put("/{session_id}/scores")
 def save_scores(session_id: str, body: ScoresSave, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    s = get_visible_session(db, user, session_id)
+    s = get_accessible_session(db, user, session_id)
     if s.is_finalized:
         raise HTTPException(400, "هذه الجلسة مقفلة. ألغوا القفل لتعديل الأعداد.")
 
@@ -58,7 +58,7 @@ def save_scores(session_id: str, body: ScoresSave, user: User = Depends(get_curr
 @router.get("/{session_id}/export")
 def export_excel(session_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     try:
-        s = get_visible_session(db, user, session_id)
+        s = get_accessible_session(db, user, session_id)
 
         xlsx_bytes = export_session(s)
 

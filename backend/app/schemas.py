@@ -63,6 +63,7 @@ class ScoresSave(BaseModel):
 class SessionCreate(BaseModel):
     trimester: int
     exam_type: str
+    subject_id: Optional[str] = None  # None → français (legacy clients)
 
 
 class FinalizeBody(BaseModel):
@@ -110,14 +111,24 @@ class ResetPasswordBody(BaseModel):
 class ClassCreate(BaseModel):
     name:        str
     school_year: str
+    level:       Optional[str] = None  # السنة الأولى…السادسة
 
 
 class ClassUpdate(BaseModel):
-    name: Optional[str] = None
+    name:  Optional[str] = None
+    level: Optional[str] = None
 
 
-class ClassOwnerUpdate(BaseModel):
-    owner_id: Optional[str] = None
+class AssignmentCreate(BaseModel):
+    teacher_id:  str
+    class_id:    str
+    subject_ids: List[str]
+
+
+class SettingsUpdate(BaseModel):
+    school_name: str = ""
+    active_year: str = ""
+    region:      str = ""
 
 
 class StudentCreate(BaseModel):

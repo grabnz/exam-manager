@@ -7,6 +7,7 @@ from .database import engine, Base, SessionLocal
 from .routers import (
     classes, sessions, scores, profile, users,
     auth as auth_router, subjects, templates,
+    assignments, settings,
 )
 from .auth import hash_password
 from . import migrations
@@ -89,6 +90,8 @@ app.include_router(auth_router.router)
 app.include_router(users.router)
 app.include_router(subjects.router)
 app.include_router(templates.router)
+app.include_router(assignments.router)
+app.include_router(settings.router)
 app.include_router(classes.router)
 app.include_router(classes.students_router)
 app.include_router(sessions.router)
