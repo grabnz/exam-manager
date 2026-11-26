@@ -193,6 +193,24 @@ func (h *UsersHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		if err := tx.Model(&db.Class{}).Where("owner_id = ?", u.ID).Update("owner_id", nil).Error; err != nil {
 			return err
 		}
+		if err := tx.Model(&db.ScoreEntry{}).Where("updated_by = ?", u.ID).Update("updated_by", nil).Error; err != nil {
+			return err
+		}
+		if tx.Migrator().HasTable("official_documents") {
+			if err := tx.Model(&db.OfficialDocument{}).Where("uploaded_by = ?", u.ID).Update("uploaded_by", nil).Error; err != nil {
+				return err
+			}
+		}
+		if tx.Migrator().HasTable("calendar_events") {
+			if err := tx.Where("user_id = ?", u.ID).Delete(&db.CalendarEvent{}).Error; err != nil {
+				return err
+			}
+		}
+		if tx.Migrator().HasTable("timetable_slots") {
+			if err := tx.Where("teacher_id = ?", u.ID).Delete(&db.TimetableSlot{}).Error; err != nil {
+				return err
+			}
+		}
 		if err := tx.Where("teacher_id = ?", u.ID).Delete(&db.TeacherAssignment{}).Error; err != nil {
 			return err
 		}

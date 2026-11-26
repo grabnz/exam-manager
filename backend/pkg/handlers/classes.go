@@ -485,13 +485,36 @@ func (h *ClassesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	err := h.DB.Transaction(func(tx *gorm.DB) error {
+		hasLegacyScores := tx.Migrator().HasTable("student_scores")
 		for _, s := range c.Sessions {
-			tx.Where("session_id = ?", s.ID).Delete(&db.ScoreEntry{})
+			if hasLegacyScores {
+				if err := tx.Exec("DELETE FROM student_scores WHERE session_id = ?", s.ID).Error; err != nil {
+					return err
+				}
+			}
+			if err := tx.Where("session_id = ?", s.ID).Delete(&db.ScoreEntry{}).Error; err != nil {
+				return err
+			}
 		}
-		tx.Where("class_id = ?", c.ID).Delete(&db.ExamSession{})
-		tx.Where("class_id = ?", c.ID).Delete(&db.Student{})
-		tx.Where("class_id = ?", c.ID).Delete(&db.TeacherAssignment{})
-		tx.Model(&db.TimetableSlot{}).Where("class_id = ?", c.ID).Update("class_id", nil)
+		if hasLegacyScores {
+			if err := tx.Exec("DELETE FROM student_scores WHERE student_id IN (SELECT id FROM students WHERE class_id = ?)", c.ID).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Where("class_id = ?", c.ID).Delete(&db.ExamSession{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("class_id = ?", c.ID).Delete(&db.Student{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("class_id = ?", c.ID).Delete(&db.TeacherAssignment{}).Error; err != nil {
+			return err
+		}
+		if tx.Migrator().HasTable("timetable_slots") {
+			if err := tx.Model(&db.TimetableSlot{}).Where("class_id = ?", c.ID).Update("class_id", nil).Error; err != nil {
+				return err
+			}
+		}
 		return tx.Delete(&c).Error
 	})
 	if err != nil {
@@ -630,7 +653,14 @@ func (h *ClassesHandler) DeleteStudent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := h.DB.Transaction(func(tx *gorm.DB) error {
-		tx.Where("student_id = ?", st.ID).Delete(&db.ScoreEntry{})
+		if tx.Migrator().HasTable("student_scores") {
+			if err := tx.Exec("DELETE FROM student_scores WHERE student_id = ?", st.ID).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Where("student_id = ?", st.ID).Delete(&db.ScoreEntry{}).Error; err != nil {
+			return err
+		}
 		return tx.Delete(&st).Error
 	})
 	if err != nil {

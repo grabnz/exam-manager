@@ -214,7 +214,14 @@ func (h *SessionsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	err := h.DB.Transaction(func(tx *gorm.DB) error {
-		tx.Where("session_id = ?", s.ID).Delete(&db.ScoreEntry{})
+		if tx.Migrator().HasTable("student_scores") {
+			if err := tx.Exec("DELETE FROM student_scores WHERE session_id = ?", s.ID).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Where("session_id = ?", s.ID).Delete(&db.ScoreEntry{}).Error; err != nil {
+			return err
+		}
 		return tx.Delete(&db.ExamSession{}, "id = ?", s.ID).Error
 	})
 	if err != nil {
