@@ -371,31 +371,31 @@ export default function ScoreEntry() {
   const pct = rows.length ? Math.round((gradedCount / rows.length) * 100) : 0
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
-      {/* ── Header ── */}
-      <header className="bg-white border-b border-gray-200 px-4 md:px-6 py-3 flex-shrink-0">
+    <div className="min-h-screen bg-canvas flex flex-col">
+      {/* ── Studio Header ── */}
+      <header className="bg-surface border-b border-line px-4 md:px-6 py-3 flex-shrink-0 shadow-card">
         <button onClick={() => navigate(session ? `/classes/${session.class_id}` : '/')}
-                className="text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1 mb-1">
-          ← {session?.class_name ?? 'رجوع'}
+                className="arabic text-xs text-ink-muted hover:text-brand flex items-center gap-1 mb-1 font-medium">
+          → {session?.class_name ?? 'رجوع'}
         </button>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <h1 className="arabic text-base md:text-xl font-bold text-gray-900 truncate">
+            <h1 className="arabic text-base md:text-lg font-bold text-ink truncate">
               {session?.class_name} — {session?.subject_name ?? ''}{' '}
-              <span className="arabic font-normal text-gray-500 text-sm">
+              <span className="arabic font-normal text-ink-muted text-xs md:text-sm">
                 الثلاثي {session?.trimester} · {session?.exam_type}
               </span>
             </h1>
-            {session?.teacher && <p className="arabic text-xs text-gray-400 truncate">{session.teacher}</p>}
+            {session?.teacher && <p className="arabic text-xs text-ink-subtle truncate">{session.teacher}</p>}
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            {saving && <span className="hidden sm:block arabic text-xs text-blue-500 font-medium">جاري الحفظ…</span>}
-            {!saving && saveMsg && <span className="hidden sm:block arabic text-xs text-green-600 font-medium">{saveMsg}</span>}
-            {saveErr && <span className="arabic text-xs text-red-500">{saveErr}</span>}
-            {xlsxError && <span className="text-xs text-red-500">{xlsxError}</span>}
+            {saving && <span className="hidden sm:block arabic text-xs text-brand font-medium">جاري الحفظ…</span>}
+            {!saving && saveMsg && <span className="hidden sm:block arabic text-xs text-emerald-600 font-medium">{saveMsg}</span>}
+            {saveErr && <span className="arabic text-xs text-rose-600">{saveErr}</span>}
+            {xlsxError && <span className="text-xs text-rose-600">{xlsxError}</span>}
 
             {locked && (
-              <span className="arabic hidden sm:flex items-center gap-1 text-xs text-green-700 bg-green-50 border border-green-200 px-2 py-1 rounded-lg font-medium">
+              <span className="arabic hidden sm:flex items-center gap-1 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl font-medium">
                 🔒 نهائي
               </span>
             )}
@@ -409,17 +409,17 @@ export default function ScoreEntry() {
                 setXlsxLoading(false)
                 if (err) setXlsxError('فشل التصدير')
               }}
-              className="text-xs border border-gray-300 hover:border-gray-400 disabled:opacity-50 px-2 py-1.5 rounded-lg">
+              className="text-xs bg-surface border border-line hover:border-brand/40 text-ink disabled:opacity-50 px-2.5 py-1.5 rounded-xl font-medium transition">
               {xlsxLoading ? '…' : '↓ Excel'}
             </button>
             <button onClick={() => window.open(`/sessions/${id}/print`, '_blank')}
-                    className="text-xs border border-red-300 hover:border-red-400 text-red-600 px-2 py-1.5 rounded-lg">
+                    className="text-xs bg-surface border border-rose-200 hover:border-rose-400 text-rose-700 px-2.5 py-1.5 rounded-xl font-medium transition">
               ↓ PDF
             </button>
 
             {!locked && (
               <button onClick={() => save()} disabled={saving || !isDirty}
-                      className="arabic text-xs bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white px-3 py-1.5 rounded-lg font-medium">
+                      className="arabic text-xs bg-brand hover:bg-brand-hover disabled:bg-gray-300 text-white px-3.5 py-1.5 rounded-xl font-semibold shadow-sm transition">
                 {saving ? '…' : isDirty ? 'حفظ' : '✓'}
               </button>
             )}
@@ -428,10 +428,10 @@ export default function ScoreEntry() {
               <button
                 onClick={toggleFinalize}
                 disabled={finalizing}
-                className={`arabic text-xs px-3 py-1.5 rounded-lg font-medium transition ${
+                className={`arabic text-xs px-3 py-1.5 rounded-xl font-semibold transition ${
                   locked
-                    ? 'border border-amber-300 text-amber-700 hover:bg-amber-50'
-                    : 'bg-green-600 hover:bg-green-700 text-white disabled:bg-gray-300'
+                    ? 'border border-amber-300 text-amber-800 hover:bg-amber-50'
+                    : 'bg-emerald-600 hover:bg-emerald-700 text-white disabled:bg-gray-300'
                 }`}
               >
                 {finalizing ? '…' : locked ? '🔓 إلغاء القفل' : '🔒 إنهاء'}

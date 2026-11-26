@@ -27,7 +27,7 @@ export default function BottomNav() {
   ]
 
   return (
-    <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-white/95 backdrop-blur border-t border-gray-200 safe-bottom print:hidden" dir="rtl">
+    <nav className="md:hidden fixed bottom-0 inset-x-0 z-30 bg-surface/95 backdrop-blur border-t border-line safe-bottom print:hidden" dir="rtl">
       <div className="grid grid-cols-5">
         {items.map(it => (
           <NavLink
@@ -36,7 +36,7 @@ export default function BottomNav() {
             end={it.end}
             className={({ isActive }) =>
               `arabic flex flex-col items-center justify-center py-2 text-[11px] font-medium transition ${
-                isActive ? 'text-blue-600' : 'text-gray-400 hover:text-gray-700'
+                isActive ? 'text-brand font-bold' : 'text-ink-subtle hover:text-ink'
               }`
             }
           >

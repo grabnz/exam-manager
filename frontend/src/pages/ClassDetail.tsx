@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ClassDetail as ClassDetailType, SessionSummary, Subject, YearGroup } from '../api/client'
 import { useUI } from '../components/ui'
+import AppShell from '../components/AppShell'
 
 const TRIMESTERS = [1, 2, 3]
 const IMTIHAN    = 'امتحان'
@@ -234,44 +235,31 @@ export default function ClassDetail() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 md:px-6 py-4">
-        <button onClick={() => navigate('/')}
-                className="text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1 mb-3">
-          ← الرئيسية
-        </button>
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="arabic text-xl md:text-2xl font-bold text-gray-900">
-              {data.name}
-              {isAdmin && (
-                <button onClick={renameClass} title="تعديل الاسم"
-                        className="mr-2 ml-2 text-sm text-gray-300 hover:text-blue-500 align-middle">✎</button>
-              )}
-            </h1>
-            <div className="flex flex-wrap gap-3 mt-1 text-sm text-gray-500">
-              {data.level && <span className="arabic">{data.level}</span>}
-              <span className="arabic">{data.school_year}</span>
-              <span className="arabic">{data.students.length} تلميذ</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button onClick={() => navigate(`/classes/${id}/synthesis`)}
-                    className="arabic text-xs md:text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg font-medium transition">
-              كشف النتائج والمقارنة
+    <AppShell
+      title={data.name}
+      subtitle={`${data.level ? `${data.level} · ` : ''}${data.school_year} · ${data.students.length} تلميذ`}
+      actions={
+        <>
+          {isAdmin && (
+            <button onClick={renameClass} title="تعديل اسم القسم"
+                    className="arabic text-xs text-ink-muted hover:text-brand border border-line bg-surface px-2.5 py-1.5 rounded-xl transition">
+              ✎ تعديل الاسم
             </button>
-            {isAdmin && (
-              <button onClick={handleDelete} disabled={deleting}
-                      className="arabic text-xs md:text-sm text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-3 py-1.5 rounded-lg transition">
-                حذف القسم
-              </button>
-            )}
-          </div>
-        </div>
-      </header>
-
-      <main className="max-w-5xl mx-auto px-4 md:px-6 py-6 md:py-8 grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
+          )}
+          <button onClick={() => navigate(`/classes/${id}/synthesis`)}
+                  className="arabic text-xs md:text-sm bg-brand text-white hover:bg-brand-hover px-3.5 py-1.5 rounded-xl font-medium shadow-sm transition">
+            كشف النتائج والمقارنة
+          </button>
+          {isAdmin && (
+            <button onClick={handleDelete} disabled={deleting}
+                    className="arabic text-xs text-rose-600 hover:bg-rose-50 border border-rose-200 px-3 py-1.5 rounded-xl transition">
+              حذف
+            </button>
+          )}
+        </>
+      }
+    >
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 md:gap-8">
 
         {/* Sessions */}
         <div className="lg:col-span-2">
@@ -473,7 +461,7 @@ export default function ClassDetail() {
           </div>
         </div>
 
-      </main>
+      </div>
 
       {/* Transfer student modal (#17) */}
       {transferStudent && (
@@ -508,7 +496,7 @@ export default function ClassDetail() {
           </form>
         </div>
       )}
-    </div>
+    </AppShell>
   )
 }
 

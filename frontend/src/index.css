@@ -2,8 +2,19 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --bg-canvas: #F7F6F2;
+  --bg-surface: #FFFFFF;
+  --text-ink: #1C252C;
+  --brand-primary: #0F4C5C;
+  --brand-accent: #D97706;
+  --border-line: #E7E5DF;
+}
+
 body {
-  @apply bg-gray-50 text-gray-900 antialiased;
+  background-color: var(--bg-canvas);
+  color: var(--text-ink);
+  @apply antialiased;
   font-family: 'IBM Plex Sans Arabic', system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
 }
 
@@ -13,9 +24,14 @@ body {
   font-family: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif;
 }
 
+/* Tabular numbers for scores, averages, ranks, and schedules */
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
 /* Print styles */
 @media print {
-  body { font-size: 11px; }
+  body { background-color: #FFFFFF !important; font-size: 11px; }
   .print\:hidden { display: none !important; }
   table { page-break-inside: auto; }
   tr { page-break-inside: avoid; }
@@ -30,7 +46,7 @@ body {
 
 /* Score input cells */
 .score-input {
-  @apply w-full text-center border-0 bg-transparent focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-inset rounded;
+  @apply w-full text-center border-0 bg-transparent focus:outline-none focus:ring-2 focus:ring-brand/60 focus:ring-inset rounded num;
   -moz-appearance: textfield;
 }
 .score-input::-webkit-outer-spin-button,
