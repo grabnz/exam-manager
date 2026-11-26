@@ -235,7 +235,70 @@ func TestEndToEndAPIParity(t *testing.T) {
 		}
 	}
 
-	// 11. Timetable overlap rejection (409)
+	// 11. Clone class (#8), Reorder & Transfer student (#17), Bulk users (#17), Synthesis (#16)
+	rec = doReq(t, h, "POST", "/api/classes/"+cls.ID+"/clone", tok, map[string]any{
+		"name": "السادسة أ", "school_year": "2026-2027", "level": "السنة السادسة", "copy_students": true,
+	})
+	if rec.Code != 200 {
+		t.Fatalf("clone class: got %d: %s", rec.Code, rec.Body.String())
+	}
+	var cloned struct {
+		ID           string `json:"id"`
+		StudentCount int    `json:"student_count"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &cloned)
+	if cloned.StudentCount != 3 {
+		t.Fatalf("expected 3 cloned students, got %d", cloned.StudentCount)
+	}
+
+	rec = doReq(t, h, "PATCH", "/api/classes/"+cls.ID+"/students/reorder", tok, map[string]any{
+		"student_ids": []string{added[1].ID, added[0].ID, student.ID},
+	})
+	if rec.Code != 200 {
+		t.Fatalf("reorder students: got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	rec = doReq(t, h, "POST", "/api/students/"+added[1].ID+"/transfer", tok, map[string]any{
+		"target_class_id": cloned.ID,
+	})
+	if rec.Code != 200 {
+		t.Fatalf("transfer student: got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	rec = doReq(t, h, "POST", "/api/users/bulk", tok, map[string]any{
+		"users": []map[string]string{
+			{"full_name": "معلم 1", "username": "t.one"},
+			{"full_name": "معلم 2"},
+		},
+	})
+	if rec.Code != 200 {
+		t.Fatalf("bulk users: got %d: %s", rec.Code, rec.Body.String())
+	}
+	var bulkUsers []struct {
+		Username string `json:"username"`
+		Password string `json:"password"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &bulkUsers)
+	if len(bulkUsers) != 2 || bulkUsers[0].Password == "" {
+		t.Fatalf("expected 2 bulk users with generated passwords, got %+v", bulkUsers)
+	}
+
+	rec = doReq(t, h, "GET", "/api/classes/"+cls.ID+"/synthesis?trimester=1", tok, nil)
+	if rec.Code != 200 {
+		t.Fatalf("synthesis: got %d: %s", rec.Code, rec.Body.String())
+	}
+	var synth struct {
+		Students []struct {
+			Average *float64 `json:"average"`
+			Rank    *int     `json:"rank"`
+		} `json:"students"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &synth)
+	if len(synth.Students) != 2 || synth.Students[0].Rank == nil {
+		t.Fatalf("expected 2 remaining students with ranks in synthesis, got %+v", synth)
+	}
+
+	// 12. Timetable overlap rejection (409)
 	rec = doReq(t, h, "POST", "/api/timetable", tok, map[string]any{
 		"teacher_id": teacher.ID, "class_id": cls.ID, "subject_id": frenchID,
 		"day": 1, "start": "08:00", "end": "09:00", "room": "1",

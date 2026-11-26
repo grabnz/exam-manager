@@ -105,9 +105,10 @@ func (h *SessionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Trimester int     `json:"trimester"`
-		ExamType  string  `json:"exam_type"`
-		SubjectID *string `json:"subject_id"`
+		Trimester  int     `json:"trimester"`
+		ExamType   string  `json:"exam_type"`
+		SubjectID  *string `json:"subject_id"`
+		TemplateID *string `json:"template_id"`
 	}
 	if err := httpx.DecodeJSON(r, &body); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "Invalid request body")
@@ -146,10 +147,17 @@ func (h *SessionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var tpl db.GridTemplate
-	if err := h.DB.Where("subject_id = ? AND is_active = ?", subj.ID, true).
-		Order("is_builtin ASC, created_at DESC").First(&tpl).Error; err != nil {
-		httpx.WriteError(w, http.StatusBadRequest, "لا توجد شبكة تقييم لهذه المادة بعد")
-		return
+	if body.TemplateID != nil && *body.TemplateID != "" {
+		if err := h.DB.Where("id = ? AND subject_id = ? AND is_active = ?", *body.TemplateID, subj.ID, true).First(&tpl).Error; err != nil {
+			httpx.WriteError(w, http.StatusBadRequest, "شبكة التقييم المختارة غير صالحة")
+			return
+		}
+	} else {
+		if err := h.DB.Where("subject_id = ? AND is_active = ?", subj.ID, true).
+			Order("is_builtin ASC, created_at DESC").First(&tpl).Error; err != nil {
+			httpx.WriteError(w, http.StatusBadRequest, "لا توجد شبكة تقييم لهذه المادة بعد")
+			return
+		}
 	}
 
 	subjID := subj.ID

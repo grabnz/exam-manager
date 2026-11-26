@@ -62,6 +62,7 @@ func New() (http.Handler, error) {
 	// Users (admin)
 	mux.HandleFunc("GET /api/users", requireAdmin(usersH.List))
 	mux.HandleFunc("POST /api/users", requireAdmin(usersH.Create))
+	mux.HandleFunc("POST /api/users/bulk", requireAdmin(usersH.BulkCreate))
 	mux.HandleFunc("PATCH /api/users/{user_id}", requireAdmin(usersH.Update))
 	mux.HandleFunc("POST /api/users/{user_id}/reset-password", requireAdmin(usersH.ResetPassword))
 	mux.HandleFunc("DELETE /api/users/{user_id}", requireAdmin(usersH.Delete))
@@ -106,15 +107,20 @@ func New() (http.Handler, error) {
 	mux.HandleFunc("DELETE /api/timetable/{slot_id}", requireAdmin(timetableH.Delete))
 
 	// Classes & students
+	mux.HandleFunc("POST /api/classes/parse-pdf", requireAdmin(classesH.ParsePDFPreview))
 	mux.HandleFunc("POST /api/classes/upload", requireAdmin(classesH.UploadPDF))
 	mux.HandleFunc("POST /api/classes", requireAdmin(classesH.Create))
 	mux.HandleFunc("GET /api/classes", requireUser(classesH.List))
 	mux.HandleFunc("GET /api/classes/{class_id}", requireUser(classesH.Get))
+	mux.HandleFunc("GET /api/classes/{class_id}/synthesis", requireUser(classesH.Synthesis))
+	mux.HandleFunc("POST /api/classes/{class_id}/clone", requireAdmin(classesH.CloneClass))
 	mux.HandleFunc("PATCH /api/classes/{class_id}", requireAdmin(classesH.Update))
 	mux.HandleFunc("DELETE /api/classes/{class_id}", requireAdmin(classesH.Delete))
 	mux.HandleFunc("POST /api/classes/{class_id}/students", requireAdmin(classesH.AddStudent))
 	mux.HandleFunc("POST /api/classes/{class_id}/students/bulk", requireAdmin(classesH.BulkAddStudents))
+	mux.HandleFunc("PATCH /api/classes/{class_id}/students/reorder", requireAdmin(classesH.ReorderStudents))
 	mux.HandleFunc("PATCH /api/students/{student_id}", requireAdmin(classesH.RenameStudent))
+	mux.HandleFunc("POST /api/students/{student_id}/transfer", requireAdmin(classesH.TransferStudent))
 	mux.HandleFunc("DELETE /api/students/{student_id}", requireAdmin(classesH.DeleteStudent))
 
 	// Sessions
