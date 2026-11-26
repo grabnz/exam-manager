@@ -3,14 +3,14 @@
 @tailwind utilities;
 
 body {
-  @apply bg-gray-50 text-gray-900;
-  font-family: system-ui, -apple-system, sans-serif;
+  @apply bg-gray-50 text-gray-900 antialiased;
+  font-family: 'IBM Plex Sans Arabic', system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
 }
 
-/* Arabic text direction for student names */
+/* Arabic text direction for student names and labels */
 .arabic {
   direction: rtl;
-  font-family: 'Segoe UI', Tahoma, sans-serif;
+  font-family: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif;
 }
 
 /* Print styles */

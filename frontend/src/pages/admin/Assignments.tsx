@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, AssignmentRow, Subject, UserRow, YearGroup } from '../../api/client'
+import { useUI } from '../../components/ui'
 
 export default function Assignments() {
   const qc = useQueryClient()
+  const ui = useUI()
   const [error, setError] = useState('')
 
   const { data: assignments = [] } = useQuery<AssignmentRow[]>({
@@ -83,9 +85,14 @@ export default function Assignments() {
                         <span className="arabic text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">{a.subject_name}</span>
                       </div>
                       <button
-                        onClick={() => {
-                          if (window.confirm(`إلغاء إسناد ${a.subject_name} للمعلم ${a.teacher_name}؟ (تبقى الأعداد محفوظة)`))
-                            run(() => api.assignments.delete(a.id))
+                        onClick={async () => {
+                          const ok = await ui.confirm({
+                            title: 'إلغاء الإسناد',
+                            message: `إلغاء إسناد ${a.subject_name} للمعلم ${a.teacher_name}؟ (تبقى الأعداد محفوظة)`,
+                            confirmLabel: 'إلغاء الإسناد',
+                            danger: true,
+                          })
+                          if (ok) run(() => api.assignments.delete(a.id))
                         }}
                         className="text-xs text-gray-300 hover:text-red-500 flex-shrink-0">
                         ✕

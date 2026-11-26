@@ -209,6 +209,53 @@ export interface TemplateSpec {
   }[]
 }
 
+export interface PDFPreviewResult {
+  students: string[]
+  meta: {
+    class_name: string
+    school_year: string
+    teacher: string
+    trimester: number | null
+    exam_type: string
+  }
+}
+
+export interface SynthesisData {
+  class_id: string
+  class_name: string
+  level?: string | null
+  school_year: string
+  trimester: number
+  subjects: {
+    id: string
+    code: string
+    name: string
+    sessions: {
+      id: string
+      exam_type: string
+      is_finalized: boolean
+      scores: Record<string, number | null>
+    }[]
+  }[]
+  students: {
+    student_id: string
+    student_name: string
+    order_index: number
+    scores: Record<string, number | null>
+    statuses: Record<string, string>
+    average: number | null
+    rank: number | null
+  }[]
+}
+
+export interface BulkCreatedUser {
+  id: string
+  username: string
+  full_name: string
+  password: string
+  role: string
+}
+
 // ── API calls ──────────────────────────────────────────────────────────────
 
 export const api = {
@@ -234,6 +281,12 @@ export const api = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
+      }),
+    bulkCreate: (users: { full_name: string; username?: string; password?: string; role?: string }[]) =>
+      req<BulkCreatedUser[]>('/users/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ users }),
       }),
     update: (id: string, data: { full_name?: string; grade?: string; is_active?: boolean }) =>
       req<UserRow>(`/users/${id}`, {
@@ -356,6 +409,19 @@ export const api = {
         '/classes/upload', { method: 'POST', body: fd }
       )
     },
+    parsePdf: (file: File) => {
+      const fd = new FormData()
+      fd.append('file', file)
+      return req<PDFPreviewResult>('/classes/parse-pdf', { method: 'POST', body: fd })
+    },
+    clone: (id: string, data: { name?: string; school_year: string; level?: string | null; copy_students?: boolean }) =>
+      req<{ id: string; name: string; school_year: string; student_count: number }>(`/classes/${id}/clone`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }),
+    synthesis: (id: string, trimester: number) =>
+      req<SynthesisData>(`/classes/${id}/synthesis?trimester=${trimester}`),
   },
   students: {
     add: (classId: string, fullName: string) =>
@@ -370,6 +436,18 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ names }),
       }),
+    reorder: (classId: string, studentIds: string[]) =>
+      req<{ ok: boolean }>(`/classes/${classId}/students/reorder`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_ids: studentIds }),
+      }),
+    transfer: (studentId: string, targetClassId: string) =>
+      req<{ ok: boolean; class_id: string }>(`/students/${studentId}/transfer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ target_class_id: targetClassId }),
+      }),
     rename: (id: string, fullName: string) =>
       req<{ ok: boolean }>(`/students/${id}`, {
         method: 'PATCH',
@@ -380,11 +458,11 @@ export const api = {
   },
   sessions: {
     get:    (id: string) => req<SessionInfo>(`/sessions/${id}`),
-    create: (classId: string, trimester: number, examType: string, subjectId?: string) =>
+    create: (classId: string, trimester: number, examType: string, subjectId?: string, templateId?: string) =>
       req<{ id: string }>(`/classes/${classId}/sessions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ trimester, exam_type: examType, subject_id: subjectId || null }),
+        body: JSON.stringify({ trimester, exam_type: examType, subject_id: subjectId || null, template_id: templateId || null }),
       }),
     delete:   (id: string) => req<void>(`/sessions/${id}`, { method: 'DELETE' }),
     finalize: (id: string, finalized: boolean) =>

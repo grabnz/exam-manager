@@ -1,24 +1,25 @@
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
+import { UsersIcon, SchoolIcon, LinkIcon, GridIcon, ShieldIcon } from '../../components/icons'
 
 const TABS = [
-  { to: '/admin/users',       label: 'الحسابات',      icon: '👥' },
-  { to: '/admin/classes',     label: 'الأقسام',       icon: '🏫' },
-  { to: '/admin/assignments', label: 'الإسناد',       icon: '🔗' },
-  { to: '/admin/templates',   label: 'شبكات التقييم', icon: '📐' },
-  { to: '/admin/settings',    label: 'الإعدادات',     icon: '⚙️' },
+  { to: '/admin/users',       label: 'الحسابات',      Icon: UsersIcon },
+  { to: '/admin/classes',     label: 'الأقسام',       Icon: SchoolIcon },
+  { to: '/admin/assignments', label: 'الإسناد',       Icon: LinkIcon },
+  { to: '/admin/templates',   label: 'شبكات التقييم', Icon: GridIcon },
+  { to: '/admin/settings',    label: 'الإعدادات',     Icon: ShieldIcon },
 ]
 
 export default function AdminLayout() {
   const navigate = useNavigate()
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 pb-16 md:pb-0">
       <header className="bg-white border-b border-gray-200 px-4 md:px-6 pt-4">
         <button onClick={() => navigate('/')}
-                className="text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1 mb-3">
-          ← الرئيسية
+                className="arabic text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1 mb-3">
+          → الرئيسية
         </button>
         <h1 className="arabic text-xl font-bold text-gray-900" dir="rtl">لوحة المدير</h1>
-        <nav className="flex gap-1 mt-3 -mb-px overflow-x-auto" dir="rtl">
+        <nav className="flex gap-1 mt-3 -mb-px overflow-x-auto scrollbar-hide" dir="rtl">
           {TABS.map(t => (
             <NavLink
               key={t.to}
@@ -31,7 +32,7 @@ export default function AdminLayout() {
                 }`
               }
             >
-              <span>{t.icon}</span> {t.label}
+              <t.Icon className="w-4 h-4" /> {t.label}
             </NavLink>
           ))}
         </nav>

@@ -130,6 +130,37 @@ export default function PrintFinale() {
               )
             })}
           </tbody>
+          {(() => {
+            const finals = rows
+              .map(r => {
+                if (r.status === 'absent' || r.status === 'exempt') return null
+                const vals: StudentValues = { criteria: r.criteria, sections: r.sections, status: r.status }
+                const graded = hasAnyValue(vals)
+                return finalFromGroupTotals(template, tplGroups.map(g => groupTotal(g, vals)), graded)
+              })
+              .filter((v): v is number => v != null)
+            if (!finals.length) return null
+            const avg = (finals.reduce((a, b) => a + b, 0) / finals.length).toFixed(2)
+            const min = Math.min(...finals)
+            const max = Math.max(...finals)
+            const passPct = Math.round((finals.filter(v => v >= 10).length / finals.length) * 100)
+            return (
+              <tfoot>
+                <tr className="bg-gray-100 font-semibold text-xs">
+                  <td colSpan={2} className="arabic border border-gray-300 px-3 py-2 text-right">
+                    ملخص القسم ({finals.length})
+                  </td>
+                  <td colSpan={tplGroups.length} className="arabic border border-gray-300 px-3 py-2 text-center">
+                    أدنى: {min} · أقصى: {max} · نسبة النجاح: {passPct}%
+                  </td>
+                  <td className="arabic border border-gray-300 px-3 py-2 text-center bg-yellow-100 font-bold">
+                    المعدل: {avg}
+                  </td>
+                  <td className="border border-gray-300 px-3 py-2" />
+                </tr>
+              </tfoot>
+            )
+          })()}
         </table>
 
         {/* Footer */}

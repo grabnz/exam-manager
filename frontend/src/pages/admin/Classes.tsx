@@ -1,7 +1,8 @@
 import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, Subject, UserRow, YearGroup } from '../../api/client'
+import { api, PDFPreviewResult, Subject, UserRow, YearGroup } from '../../api/client'
+import { useUI } from '../../components/ui'
 
 const LEVELS = [
   'السنة الأولى', 'السنة الثانية', 'السنة الثالثة',
@@ -27,10 +28,13 @@ function currentSchoolYear(): string {
 export default function Classes() {
   const navigate = useNavigate()
   const qc = useQueryClient()
+  const ui = useUI()
   const fileRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
+  const [pdfPreview, setPdfPreview] = useState<PDFPreviewResult | null>(null)
+  const [cloneTarget, setCloneTarget] = useState<{ id: string; name: string; level?: string | null; year: string } | null>(null)
 
   const { data: years = [], isLoading } = useQuery<YearGroup[]>({
     queryKey: ['classes'],
@@ -53,11 +57,10 @@ export default function Classes() {
     setError('')
     setUploading(true)
     try {
-      const res = await api.classes.upload(file)
-      await qc.invalidateQueries({ queryKey: ['classes'] })
-      navigate(`/classes/${res.id}`)
+      const res = await api.classes.parsePdf(file)
+      setPdfPreview(res)
     } catch (err: any) {
-      setError(err.message || 'فشل الاستيراد')
+      setError(err.message || 'فشل قراءة ملف PDF')
     } finally {
       setUploading(false)
       e.target.value = ''
@@ -123,16 +126,28 @@ export default function Classes() {
                   </button>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <button
-                      onClick={() => {
-                        const name = window.prompt('اسم القسم الجديد :', c.name)
-                        if (name?.trim() && name.trim() !== c.name) run(() => api.classes.rename(c.id, name.trim()))
+                      title="نسخ إلى سنة جديدة"
+                      onClick={() => setCloneTarget({ id: c.id, name: c.name, level: c.level, year: year.label })}
+                      className="arabic text-xs text-gray-500 hover:text-emerald-600 border border-gray-200 px-2 py-1 rounded-lg">
+                      نسخ
+                    </button>
+                    <button
+                      onClick={async () => {
+                        const name = await ui.prompt({ title: 'تعديل اسم القسم', defaultValue: c.name })
+                        if (name && name !== c.name) run(() => api.classes.rename(c.id, name))
                       }}
                       className="text-xs text-gray-400 hover:text-blue-500 border border-gray-200 px-2 py-1 rounded-lg">
                       ✎
                     </button>
                     <button
-                      onClick={() => {
-                        if (window.confirm(`حذف القسم "${c.name}" وكل بياناته نهائياً؟`)) run(() => api.classes.delete(c.id))
+                      onClick={async () => {
+                        const ok = await ui.confirm({
+                          title: 'حذف القسم',
+                          message: `حذف القسم "${c.name}" وكل بياناته نهائياً؟`,
+                          confirmLabel: 'حذف',
+                          danger: true,
+                        })
+                        if (ok) run(() => api.classes.delete(c.id))
                       }}
                       className="text-xs text-gray-400 hover:text-red-500 border border-gray-200 px-2 py-1 rounded-lg">
                       ✕
@@ -144,6 +159,193 @@ export default function Classes() {
           </section>
         ))
       )}
+
+      {pdfPreview && (
+        <PDFPreviewModal
+          preview={pdfPreview}
+          onClose={() => setPdfPreview(null)}
+          onCreated={async (classId) => {
+            setPdfPreview(null)
+            await qc.invalidateQueries({ queryKey: ['classes'] })
+            ui.toast('تم استيراد القسم بنجاح', 'success')
+            navigate(`/classes/${classId}`)
+          }}
+        />
+      )}
+
+      {cloneTarget && (
+        <CloneClassModal
+          source={cloneTarget}
+          onClose={() => setCloneTarget(null)}
+          onCloned={async (classId) => {
+            setCloneTarget(null)
+            await qc.invalidateQueries({ queryKey: ['classes'] })
+            ui.toast('تم نسخ القسم بنجاح', 'success')
+            navigate(`/classes/${classId}`)
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function PDFPreviewModal({ preview, onClose, onCreated }: {
+  preview: PDFPreviewResult
+  onClose: () => void
+  onCreated: (classId: string) => Promise<void>
+}) {
+  const [name, setName] = useState(preview.meta.class_name || '')
+  const [year, setYear] = useState(preview.meta.school_year || currentSchoolYear())
+  const [level, setLevel] = useState('')
+  const [studentsText, setStudentsText] = useState(preview.students.join('\n'))
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState('')
+
+  const students = parseNames(studentsText)
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!name.trim() || !year.trim()) return
+    setSaving(true)
+    setErr('')
+    try {
+      const cls = await api.classes.create(name.trim(), year.trim(), level || undefined)
+      if (students.length > 0) await api.students.bulkAdd(cls.id, students)
+      await onCreated(cls.id)
+    } catch (e: any) {
+      setErr(e.message || 'فشل الإنشاء')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
+      <form onSubmit={submit} onClick={e => e.stopPropagation()}
+            className="w-full max-w-lg bg-white rounded-2xl p-5 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto" dir="rtl">
+        <h3 className="arabic text-base font-bold text-gray-900">معاينة وتصحيح بيانات PDF</h3>
+        {err && <p className="arabic text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{err}</p>}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label className="arabic block text-xs text-gray-600 mb-1">اسم القسم</label>
+            <input value={name} onChange={e => setName(e.target.value)} required
+                   className="arabic w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm" />
+          </div>
+          <div>
+            <label className="arabic block text-xs text-gray-600 mb-1">المستوى</label>
+            <select value={level} onChange={e => setLevel(e.target.value)}
+                    className="arabic w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
+              <option value="">—</option>
+              {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="arabic block text-xs text-gray-600 mb-1">السنة الدراسية</label>
+            <input value={year} onChange={e => setYear(e.target.value)} dir="ltr" required
+                   className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm" />
+          </div>
+        </div>
+        <div>
+          <label className="arabic block text-xs text-gray-600 mb-1">
+            قائمة التلاميذ المستخرجة ({students.length} تلميذ) — يمكن التعديل قبل الحفظ
+          </label>
+          <textarea rows={8} value={studentsText} onChange={e => setStudentsText(e.target.value)}
+                    className="arabic w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-right" />
+        </div>
+        <div className="flex gap-2">
+          <button type="submit" disabled={saving || !name.trim()}
+                  className="arabic flex-1 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-xl text-sm font-medium">
+            {saving ? 'جاري الإنشاء…' : 'تأكيد وإنشاء القسم'}
+          </button>
+          <button type="button" onClick={onClose}
+                  className="arabic px-4 py-2 border border-gray-200 rounded-xl text-sm text-gray-600">
+            إلغاء
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+function nextSchoolYear(y: string): string {
+  const m = y.match(/(\d{4})-(\d{4})/)
+  if (m) return `${Number(m[1]) + 1}-${Number(m[2]) + 1}`
+  return currentSchoolYear()
+}
+
+function nextLevel(lvl?: string | null): string {
+  if (!lvl) return ''
+  const idx = LEVELS.indexOf(lvl)
+  return idx >= 0 && idx < LEVELS.length - 1 ? LEVELS[idx + 1] : lvl
+}
+
+function CloneClassModal({ source, onClose, onCloned }: {
+  source: { id: string; name: string; level?: string | null; year: string }
+  onClose: () => void
+  onCloned: (classId: string) => Promise<void>
+}) {
+  const [name, setName] = useState(source.name)
+  const [year, setYear] = useState(nextSchoolYear(source.year))
+  const [level, setLevel] = useState(nextLevel(source.level))
+  const [copyStudents, setCopyStudents] = useState(true)
+  const [saving, setSaving] = useState(false)
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    try {
+      const res = await api.classes.clone(source.id, {
+        name: name.trim(),
+        school_year: year.trim(),
+        level: level || null,
+        copy_students: copyStudents,
+      })
+      await onCloned(res.id)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
+      <form onSubmit={submit} onClick={e => e.stopPropagation()}
+            className="w-full max-w-sm bg-white rounded-2xl p-5 space-y-4 shadow-xl" dir="rtl">
+        <h3 className="arabic text-base font-bold text-gray-900">نسخ القسم إلى سنة جديدة</h3>
+        <div className="space-y-3">
+          <div>
+            <label className="arabic block text-xs text-gray-600 mb-1">اسم القسم الجديد</label>
+            <input value={name} onChange={e => setName(e.target.value)} required
+                   className="arabic w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm" />
+          </div>
+          <div>
+            <label className="arabic block text-xs text-gray-600 mb-1">المستوى</label>
+            <select value={level} onChange={e => setLevel(e.target.value)}
+                    className="arabic w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
+              <option value="">—</option>
+              {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="arabic block text-xs text-gray-600 mb-1">السنة الدراسية المستهدفة</label>
+            <input value={year} onChange={e => setYear(e.target.value)} dir="ltr" required
+                   className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm" />
+          </div>
+          <label className="arabic flex items-center gap-2 text-xs text-gray-700">
+            <input type="checkbox" checked={copyStudents} onChange={e => setCopyStudents(e.target.checked)} />
+            نسخ قائمة التلاميذ أيضاً
+          </label>
+        </div>
+        <div className="flex gap-2">
+          <button type="submit" disabled={saving || !name.trim() || !year.trim()}
+                  className="arabic flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white rounded-xl text-sm font-medium">
+            {saving ? 'جاري النسخ…' : 'نسخ القسم'}
+          </button>
+          <button type="button" onClick={onClose}
+                  className="arabic px-4 py-2 border border-gray-200 rounded-xl text-sm text-gray-600">
+            إلغاء
+          </button>
+        </div>
+      </form>
     </div>
   )
 }

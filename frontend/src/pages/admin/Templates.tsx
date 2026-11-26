@@ -2,9 +2,11 @@ import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, Subject, TemplateDef, TemplateSpec } from '../../api/client'
 import { groups as templateGroups } from '../../lib/grid'
+import { useUI } from '../../components/ui'
 
 export default function Templates() {
   const qc = useQueryClient()
+  const ui = useUI()
   const [subjectId, setSubjectId] = useState('')
   const [error,     setError]     = useState('')
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -66,8 +68,14 @@ export default function Templates() {
             editing={editingId === t.id}
             onEdit={() => setEditingId(editingId === t.id ? null : t.id)}
             onClone={() => run(() => api.templates.clone(t.id))}
-            onDelete={() => {
-              if (window.confirm('حذف هذه الشبكة نهائياً؟')) run(() => api.templates.delete(t.id))
+            onDelete={async () => {
+              const ok = await ui.confirm({
+                title: 'حذف شبكة التقييم',
+                message: 'حذف هذه الشبكة نهائياً؟',
+                confirmLabel: 'حذف',
+                danger: true,
+              })
+              if (ok) run(() => api.templates.delete(t.id))
             }}
             onSaved={() => { setEditingId(null); run(async () => {}) }}
             onError={setError}

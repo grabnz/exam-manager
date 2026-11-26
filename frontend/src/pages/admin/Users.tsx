@@ -1,12 +1,16 @@
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, UserRow } from '../../api/client'
+import { api, BulkCreatedUser, UserRow } from '../../api/client'
 import { useAuth } from '../../auth'
+import { useUI } from '../../components/ui'
 
 export default function Users() {
   const qc = useQueryClient()
+  const ui = useUI()
   const { user: me } = useAuth()
   const [error, setError] = useState('')
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [credentialsSlip, setCredentialsSlip] = useState<BulkCreatedUser[] | null>(null)
 
   const { data: users = [], isLoading } = useQuery<UserRow[]>({
     queryKey: ['users'],
@@ -31,7 +35,63 @@ export default function Users() {
         </div>
       )}
 
-      <CreateUserForm onCreate={(data) => run(() => api.users.create(data))} />
+      <div className="space-y-3">
+        <CreateUserForm onCreate={(data) => run(() => api.users.create(data))} />
+        <button
+          type="button"
+          onClick={() => setBulkOpen(v => !v)}
+          className="arabic w-full py-2.5 bg-white border border-blue-200 text-blue-700 hover:bg-blue-50 rounded-xl text-sm font-medium transition"
+        >
+          {bulkOpen ? 'إغلاق الإضافة الجماعية' : '+ إضافة عدة معلمين دفعة واحدة (مع بطاقة الدخول)'}
+        </button>
+        {bulkOpen && (
+          <BulkUsersForm
+            onCreated={async (created) => {
+              await qc.invalidateQueries({ queryKey: ['users'] })
+              setBulkOpen(false)
+              setCredentialsSlip(created)
+            }}
+            onError={setError}
+          />
+        )}
+      </div>
+
+      {credentialsSlip && credentialsSlip.length > 0 && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 space-y-3" dir="rtl">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <h3 className="arabic text-sm font-bold text-emerald-900">
+              ✓ تم إنشاء {credentialsSlip.length} حساب — انسخوا أو اطبعوا بيانات الدخول
+            </h3>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const text = credentialsSlip.map(u => `${u.full_name} | ${u.username} | ${u.password}`).join('\n')
+                  void navigator.clipboard.writeText(text)
+                  ui.toast('تم نسخ بيانات الدخول', 'success')
+                }}
+                className="arabic text-xs px-3 py-1 bg-white border border-emerald-300 text-emerald-800 rounded-lg hover:bg-emerald-100"
+              >
+                نسخ الكل
+              </button>
+              <button type="button" onClick={() => window.print()}
+                      className="arabic text-xs px-3 py-1 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">
+                طباعة
+              </button>
+              <button type="button" onClick={() => setCredentialsSlip(null)}
+                      className="text-xs text-emerald-700 px-2">✕</button>
+            </div>
+          </div>
+          <div className="bg-white rounded-lg border border-emerald-200 divide-y divide-gray-100 text-xs">
+            {credentialsSlip.map(u => (
+              <div key={u.id} className="flex items-center justify-between px-3 py-2">
+                <span className="arabic font-medium text-gray-800">{u.full_name || u.username}</span>
+                <span className="font-mono text-gray-600" dir="ltr">{u.username} / <strong>{u.password}</strong></span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <section>
         <h2 className="arabic text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 text-right" dir="rtl">
@@ -47,13 +107,22 @@ export default function Users() {
                 user={u}
                 isMe={u.id === me?.id}
                 onToggleActive={() => run(() => api.users.update(u.id, { is_active: !u.is_active }))}
-                onResetPassword={() => {
-                  const pw = window.prompt('كلمة المرور المؤقتة الجديدة (6 أحرف على الأقل):')
+                onResetPassword={async () => {
+                  const pw = await ui.prompt({
+                    title: 'إعادة تعيين كلمة المرور',
+                    label: 'كلمة المرور المؤقتة الجديدة (6 أحرف على الأقل)',
+                    dir: 'ltr',
+                  })
                   if (pw) run(() => api.users.resetPassword(u.id, pw))
                 }}
-                onDelete={() => {
-                  if (window.confirm(`حذف حساب "${u.username}" نهائياً؟ (تبقى الأعداد والأقسام محفوظة)`))
-                    run(() => api.users.delete(u.id))
+                onDelete={async () => {
+                  const ok = await ui.confirm({
+                    title: 'حذف الحساب',
+                    message: `حذف حساب "${u.username}" نهائياً؟ (تبقى الأعداد والأقسام محفوظة)`,
+                    confirmLabel: 'حذف',
+                    danger: true,
+                  })
+                  if (ok) run(() => api.users.delete(u.id))
                 }}
               />
             ))}
@@ -61,6 +130,62 @@ export default function Users() {
         )}
       </section>
     </div>
+  )
+}
+
+// ── Bulk user creation (#17) ──────────────────────────────────────────────────
+function BulkUsersForm({ onCreated, onError }: {
+  onCreated: (users: BulkCreatedUser[]) => Promise<void>
+  onError: (msg: string) => void
+}) {
+  const [raw, setRaw] = useState('')
+  const [saving, setSaving] = useState(false)
+
+  const parsed = raw
+    .split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(Boolean)
+    .map(line => {
+      const [fullName, username] = line.split(/[,;\t|]/).map(s => s?.trim() ?? '')
+      return { full_name: fullName, username: username || undefined }
+    })
+    .filter(u => u.full_name)
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!parsed.length) return
+    setSaving(true)
+    onError('')
+    try {
+      const created = await api.users.bulkCreate(parsed)
+      await onCreated(created)
+    } catch (err: any) {
+      onError(err.message || 'فشل الإنشاء الجماعي')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="bg-white border border-blue-200 rounded-xl p-4 space-y-3" dir="rtl">
+      <label className="arabic block text-xs font-medium text-gray-600">
+        معلم في كل سطر: <span className="font-mono" dir="ltr">الاسم الكامل, username</span> (اسم المستخدم اختياري ويُنشأ تلقائياً مع كلمة مرور مؤقتة)
+      </label>
+      <textarea
+        rows={5}
+        value={raw}
+        onChange={e => setRaw(e.target.value)}
+        placeholder={"سلمى بن علي, salma.b\nكريم الطرابلسي, karim.t"}
+        className="arabic w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-right"
+      />
+      <div className="flex items-center justify-between">
+        <span className="arabic text-xs text-gray-400">{parsed.length} حساب جاهز</span>
+        <button type="submit" disabled={saving || parsed.length === 0}
+                className="arabic px-4 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg text-xs font-medium">
+          {saving ? 'جاري الإنشاء…' : 'إنشاء الحسابات'}
+        </button>
+      </div>
+    </form>
   )
 }
 

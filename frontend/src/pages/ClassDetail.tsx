@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, ClassDetail as ClassDetailType, SessionSummary, Subject } from '../api/client'
+import { api, ClassDetail as ClassDetailType, SessionSummary, Subject, YearGroup } from '../api/client'
+import { useUI } from '../components/ui'
 
 const TRIMESTERS = [1, 2, 3]
 const IMTIHAN    = 'امتحان'
@@ -20,6 +21,7 @@ export default function ClassDetail() {
   const { id }    = useParams<{ id: string }>()
   const navigate  = useNavigate()
   const qc        = useQueryClient()
+  const ui        = useUI()
   const [searchParams, setSearchParams] = useSearchParams()
 
   const [deleting,   setDeleting]   = useState(false)
@@ -30,6 +32,9 @@ export default function ClassDetail() {
   const [bulkOpen, setBulkOpen] = useState(false)
   const [bulkText, setBulkText] = useState('')
   const [bulkAdding, setBulkAdding] = useState(false)
+  const [selectedTemplateId, setSelectedTemplateId] = useState('')
+  const [transferStudent, setTransferStudent] = useState<{ id: string; full_name: string } | null>(null)
+  const [transferClassId, setTransferClassId] = useState('')
 
   const { data, isLoading, error } = useQuery<ClassDetailType>({
     queryKey: ['class', id],
@@ -56,6 +61,21 @@ export default function ClassDetail() {
 
   const activeSubject = searchParams.get('subject') ?? subjectTabs[0]?.id ?? null
 
+  const { data: subjectTemplates = [] } = useQuery({
+    queryKey: ['templates', activeSubject],
+    queryFn: () => api.templates.listForSubject(activeSubject!),
+    enabled: !!activeSubject,
+  })
+  const { data: allYears = [] } = useQuery<YearGroup[]>({
+    queryKey: ['classes'],
+    queryFn: api.classes.list,
+    enabled: !!transferStudent,
+  })
+  const otherClasses = useMemo(
+    () => allYears.flatMap(y => y.classes.map(c => ({ ...c, year: y.label }))).filter(c => c.id !== id),
+    [allYears, id]
+  )
+
   async function openOrCreate(trimester: number, examType: string) {
     if (!activeSubject) return
     const key = `${trimester}-${examType}`
@@ -65,45 +85,57 @@ export default function ClassDetail() {
     if (existing) { navigate(`/sessions/${existing.id}`); return }
     setCreating(key)
     try {
-      const res = await api.sessions.create(id!, trimester, examType, activeSubject)
+      const res = await api.sessions.create(id!, trimester, examType, activeSubject, selectedTemplateId || undefined)
       await qc.invalidateQueries({ queryKey: ['class', id] })
       navigate(`/sessions/${res.id}`)
     } catch (err: any) {
-      alert(err.message || 'حدث خطأ')
+      ui.toast(err.message || 'حدث خطأ', 'error')
     } finally {
       setCreating(null)
     }
   }
 
   async function handleDelete() {
-    if (!confirm('حذف هذا القسم وكل بياناته نهائياً ؟')) return
+    const ok = await ui.confirm({
+      title: 'حذف القسم',
+      message: 'حذف هذا القسم وكل بياناته نهائياً؟',
+      confirmLabel: 'حذف',
+      danger: true,
+    })
+    if (!ok) return
     setDeleting(true)
     try {
       await api.classes.delete(id!)
       navigate('/')
     } catch (err: any) {
-      alert(err.message || 'حدث خطأ')
+      ui.toast(err.message || 'حدث خطأ', 'error')
       setDeleting(false)
     }
   }
 
   async function deleteSession(sessionId: string, examType: string) {
-    if (!confirm(`حذف "${examType}" وجميع أعداده ؟`)) return
+    const ok = await ui.confirm({
+      title: 'حذف الجلسة',
+      message: `حذف "${examType}" وجميع أعداده؟`,
+      confirmLabel: 'حذف',
+      danger: true,
+    })
+    if (!ok) return
     setDeletingS(sessionId)
     try {
       await api.sessions.delete(sessionId)
       await qc.invalidateQueries({ queryKey: ['class', id] })
     } catch (err: any) {
-      alert(err.message || 'حدث خطأ')
+      ui.toast(err.message || 'حدث خطأ', 'error')
     } finally {
       setDeletingS(null)
     }
   }
 
   async function renameClass() {
-    const name = window.prompt('اسم القسم الجديد :', data?.name ?? '')
-    if (!name?.trim() || name.trim() === data?.name) return
-    await api.classes.rename(id!, name.trim())
+    const name = await ui.prompt({ title: 'تعديل اسم القسم', defaultValue: data?.name ?? '' })
+    if (!name || name === data?.name) return
+    await api.classes.rename(id!, name)
     await qc.invalidateQueries({ queryKey: ['class', id] })
     await qc.invalidateQueries({ queryKey: ['classes'] })
   }
@@ -147,16 +179,43 @@ export default function ClassDetail() {
   }
 
   async function renameStudent(studentId: string, current: string) {
-    const name = window.prompt('الاسم الجديد :', current)
-    if (!name?.trim() || name.trim() === current) return
-    await api.students.rename(studentId, name.trim())
+    const name = await ui.prompt({ title: 'تعديل اسم التلميذ', defaultValue: current })
+    if (!name || name === current) return
+    await api.students.rename(studentId, name)
     await qc.invalidateQueries({ queryKey: ['class', id] })
   }
 
   async function deleteStudent(studentId: string, name: string) {
-    if (!confirm(`حذف التلميذ "${name}" وجميع أعداده نهائياً ؟`)) return
+    const ok = await ui.confirm({
+      title: 'حذف تلميذ',
+      message: `حذف التلميذ "${name}" وجميع أعداده نهائياً؟`,
+      confirmLabel: 'حذف',
+      danger: true,
+    })
+    if (!ok) return
     await api.students.delete(studentId)
     await qc.invalidateQueries({ queryKey: ['class', id] })
+  }
+
+  async function moveStudent(index: number, delta: -1 | 1) {
+    if (!data) return
+    const target = index + delta
+    if (target < 0 || target >= data.students.length) return
+    const ids = data.students.map(s => s.id)
+    ;[ids[index], ids[target]] = [ids[target], ids[index]]
+    await api.students.reorder(id!, ids)
+    await qc.invalidateQueries({ queryKey: ['class', id] })
+  }
+
+  async function confirmTransfer(e: React.FormEvent) {
+    e.preventDefault()
+    if (!transferStudent || !transferClassId) return
+    await api.students.transfer(transferStudent.id, transferClassId)
+    setTransferStudent(null)
+    setTransferClassId('')
+    ui.toast('تم نقل التلميذ مع الاحتفاظ بأعداده', 'success')
+    await qc.invalidateQueries({ queryKey: ['class', id] })
+    await qc.invalidateQueries({ queryKey: ['classes'] })
   }
 
   if (isLoading) return <Loading />
@@ -197,12 +256,18 @@ export default function ClassDetail() {
               <span className="arabic">{data.students.length} تلميذ</span>
             </div>
           </div>
-          {isAdmin && (
-            <button onClick={handleDelete} disabled={deleting}
-                    className="arabic text-sm text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-3 py-1.5 rounded-lg transition flex-shrink-0">
-              حذف القسم
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button onClick={() => navigate(`/classes/${id}/synthesis`)}
+                    className="arabic text-xs md:text-sm bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg font-medium transition">
+              كشف النتائج والمقارنة
             </button>
-          )}
+            {isAdmin && (
+              <button onClick={handleDelete} disabled={deleting}
+                      className="arabic text-xs md:text-sm text-red-500 hover:text-red-700 border border-red-200 hover:border-red-400 px-3 py-1.5 rounded-lg transition">
+                حذف القسم
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -232,6 +297,22 @@ export default function ClassDetail() {
               {isAdmin
                 ? '⚠ لا معلم مسند لهذا القسم — أسندوا المعلمين والمواد من لوحة المدير.'
                 : '⚠ لستم مسندين لهذا القسم.'}
+            </div>
+          )}
+
+          {activeSubject && subjectTemplates.length > 1 && (
+            <div className="mb-3 flex items-center gap-2 text-xs" dir="rtl">
+              <span className="arabic text-gray-500">شبكة الجلسات الجديدة:</span>
+              <select
+                value={selectedTemplateId}
+                onChange={e => setSelectedTemplateId(e.target.value)}
+                className="arabic bg-white border border-gray-200 rounded-lg px-2.5 py-1 text-xs text-gray-700"
+              >
+                <option value="">الافتراضية (الأحدث)</option>
+                {subjectTemplates.map(t => (
+                  <option key={t.id} value={t.id}>{t.name}</option>
+                ))}
+              </select>
             </div>
           )}
 
@@ -356,12 +437,18 @@ export default function ClassDetail() {
                   <span className="text-xs text-gray-400 w-5 text-right flex-shrink-0">{i + 1}</span>
                   <span className="arabic text-sm text-gray-800 flex-1">{s.full_name}</span>
                   {isAdmin && (
-                    <>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                      <button onClick={() => moveStudent(i, -1)} disabled={i === 0} title="أعلى"
+                              className="text-xs text-gray-400 hover:text-blue-600 disabled:opacity-20 px-0.5">↑</button>
+                      <button onClick={() => moveStudent(i, 1)} disabled={i === data.students.length - 1} title="أسفل"
+                              className="text-xs text-gray-400 hover:text-blue-600 disabled:opacity-20 px-0.5">↓</button>
+                      <button onClick={() => setTransferStudent({ id: s.id, full_name: s.full_name })} title="نقل إلى قسم آخر"
+                              className="text-xs text-gray-400 hover:text-emerald-600 px-0.5">⇄</button>
                       <button onClick={() => renameStudent(s.id, s.full_name)} title="تعديل"
-                              className="text-xs text-gray-300 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition">✎</button>
+                              className="text-xs text-gray-400 hover:text-blue-500 px-0.5">✎</button>
                       <button onClick={() => deleteStudent(s.id, s.full_name)} title="حذف"
-                              className="text-xs text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition">✕</button>
-                    </>
+                              className="text-xs text-gray-400 hover:text-red-500 px-0.5">✕</button>
+                    </div>
                   )}
                 </div>
               ))}
@@ -387,6 +474,40 @@ export default function ClassDetail() {
         </div>
 
       </main>
+
+      {/* Transfer student modal (#17) */}
+      {transferStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setTransferStudent(null)}>
+          <form onSubmit={confirmTransfer} onClick={e => e.stopPropagation()}
+                className="w-full max-w-sm bg-white rounded-2xl p-5 space-y-4 shadow-xl" dir="rtl">
+            <h3 className="arabic text-base font-bold text-gray-900">نقل التلميذ</h3>
+            <p className="arabic text-sm text-gray-600">
+              نقل «{transferStudent.full_name}» إلى قسم آخر (تبقى جميع أعداده محفوظة):
+            </p>
+            <select
+              value={transferClassId}
+              onChange={e => setTransferClassId(e.target.value)}
+              required
+              className="arabic w-full border border-gray-200 rounded-xl px-3 py-2 text-sm"
+            >
+              <option value="">اختاروا القسم المستهدف…</option>
+              {otherClasses.map(c => (
+                <option key={c.id} value={c.id}>{c.name} ({c.year})</option>
+              ))}
+            </select>
+            <div className="flex gap-2">
+              <button type="submit" disabled={!transferClassId}
+                      className="arabic flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white rounded-xl text-sm font-medium">
+                نقل
+              </button>
+              <button type="button" onClick={() => setTransferStudent(null)}
+                      className="arabic flex-1 py-2 border border-gray-200 text-gray-600 rounded-xl text-sm font-medium">
+                إلغاء
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   )
 }
