@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"os"
 
-	"exam-manager/backend/internal/app"
+	"exam-manager/backend/pkg/app"
 )
 
 func main() {

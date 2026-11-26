@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"exam-manager/backend/internal/db"
+	"exam-manager/backend/pkg/db"
 
 	"github.com/xuri/excelize/v2"
 )

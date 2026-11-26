@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"sync"
 
-	"exam-manager/backend/internal/app"
+	"exam-manager/backend/pkg/app"
 )
 
 var (

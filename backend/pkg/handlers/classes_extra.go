@@ -8,10 +8,10 @@ import (
 	"strconv"
 	"strings"
 
-	"exam-manager/backend/internal/auth"
-	"exam-manager/backend/internal/db"
-	"exam-manager/backend/internal/httpx"
-	"exam-manager/backend/internal/services"
+	"exam-manager/backend/pkg/auth"
+	"exam-manager/backend/pkg/db"
+	"exam-manager/backend/pkg/httpx"
+	"exam-manager/backend/pkg/services"
 
 	"gorm.io/gorm"
 )

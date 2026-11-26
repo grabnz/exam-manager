@@ -5,10 +5,10 @@ import (
 	"log"
 	"net/http"
 
-	"exam-manager/backend/internal/auth"
-	"exam-manager/backend/internal/db"
-	"exam-manager/backend/internal/handlers"
-	"exam-manager/backend/internal/httpx"
+	"exam-manager/backend/pkg/auth"
+	"exam-manager/backend/pkg/db"
+	"exam-manager/backend/pkg/handlers"
+	"exam-manager/backend/pkg/httpx"
 )
 
 // New initializes the database, runs migrations and admin bootstrap, and returns

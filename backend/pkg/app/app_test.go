@@ -7,7 +7,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"exam-manager/backend/internal/app"
+	"exam-manager/backend/pkg/app"
 )
 
 func doReq(t *testing.T, h http.Handler, method, path, token string, body any) *httptest.ResponseRecorder {

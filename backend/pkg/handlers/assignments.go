@@ -3,9 +3,9 @@ package handlers
 import (
 	"net/http"
 
-	"exam-manager/backend/internal/auth"
-	"exam-manager/backend/internal/db"
-	"exam-manager/backend/internal/httpx"
+	"exam-manager/backend/pkg/auth"
+	"exam-manager/backend/pkg/db"
+	"exam-manager/backend/pkg/httpx"
 
 	"gorm.io/gorm"
 )

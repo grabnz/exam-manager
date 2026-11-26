@@ -3,7 +3,7 @@ package services
 import (
 	"math"
 
-	"exam-manager/backend/internal/db"
+	"exam-manager/backend/pkg/db"
 )
 
 // SectionSubtotal computes a single section's subtotal:
