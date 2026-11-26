@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"strings"
 	"time"
@@ -127,9 +128,11 @@ var frenchTemplateSeed = tplSeed{
 	},
 }
 
-// Migrate runs GORM AutoMigrate and idempotent one-shot data seeds.
+// Migrate runs GORM AutoMigrate per model (so an existing SQLAlchemy table
+// never blocks creating newer tables like timetable_slots) and runs idempotent
+// one-shot data seeds.
 func Migrate(conn *gorm.DB) error {
-	if err := conn.AutoMigrate(
+	models := []any{
 		&SchemaMigration{},
 		&User{},
 		&SchoolSettings{},
@@ -146,8 +149,11 @@ func Migrate(conn *gorm.DB) error {
 		&CalendarEvent{},
 		&TimetableSlot{},
 		&OfficialDocument{},
-	); err != nil {
-		return fmt.Errorf("auto migrate: %w", err)
+	}
+	for _, m := range models {
+		if err := conn.AutoMigrate(m); err != nil {
+			log.Printf("[startup] AutoMigrate %T warning: %v", m, err)
+		}
 	}
 
 	isPG := conn.Dialector.Name() == "postgres"

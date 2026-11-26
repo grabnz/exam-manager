@@ -22,6 +22,7 @@ func Open() (*gorm.DB, error) {
 	}
 
 	cfg := &gorm.Config{
+		DisableForeignKeyConstraintWhenMigrating: true,
 		Logger: logger.New(
 			log.New(os.Stdout, "\r\n", log.LstdFlags),
 			logger.Config{
