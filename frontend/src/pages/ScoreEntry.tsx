@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, ApiError, SessionInfo, ScoreRow, ScoreSaveItem, TemplateDef } from '../api/client'
+import { api, ApiError, SessionInfo, ScoreRow, ScoreSaveItem, TemplateDef, StudentStatus } from '../api/client'
 import { groups as templateGroups, finalFromGroupTotals } from '../lib/grid'
 import { palette, UIPalette } from '../lib/palette'
 import { enqueue, getQueued, removeQueued, flushOne, QueuedSave } from '../lib/offlineQueue'
@@ -39,6 +39,37 @@ function buildTabs(tpl: TemplateDef): Tab[] {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 type ScoreMap = Record<string, Record<string, number | null>>
+type StatusMap = Record<string, StudentStatus>
+
+function nextStatus(cur: StudentStatus | undefined): StudentStatus {
+  if (cur === 'absent') return 'exempt'
+  if (cur === 'exempt') return 'present'
+  return 'absent'
+}
+function statusLabel(st: StudentStatus | undefined): string | null {
+  if (st === 'absent') return 'غ'
+  if (st === 'exempt') return 'معفى'
+  return null
+}
+function initStatusMap(rows: ScoreRow[]): StatusMap {
+  const map: StatusMap = {}
+  for (const r of rows) map[r.student_id] = r.status ?? 'present'
+  return map
+}
+function hasSubVal(sid: string, sub: Subsection, map: ScoreMap): boolean {
+  const m = map[sid]
+  if (!m) return false
+  if (sub.stField && m[sub.stField] != null) return true
+  if (sub.bonusField && m[sub.bonusField] != null) return true
+  return sub.fields.some(f => m[f.key] != null)
+}
+function hasTabVal(sid: string, tab: Tab, map: ScoreMap): boolean {
+  return tab.subsections.some(sub => hasSubVal(sid, sub, map))
+}
+function hasAnyVal(sid: string, map: ScoreMap): boolean {
+  const m = map[sid]
+  return !!m && Object.values(m).some(v => v != null)
+}
 
 function allFields(tab: Tab): string[] {
   return tab.subsections.flatMap(s => {
@@ -86,7 +117,7 @@ function isDirect(sid: string, sub: Subsection, map: ScoreMap): boolean {
 function tabTot(sid: string, tab: Tab, map: ScoreMap) {
   return tab.subsections.reduce((s, sub) => s + subTot(sid, sub, map), 0)
 }
-function fmt(n: number | null) { return n != null && n > 0 ? +n.toFixed(2) + '' : '—' }
+function fmt(n: number | null, hasVal = true) { return hasVal && n != null ? +n.toFixed(2) + '' : '—' }
 
 // ── Main component ────────────────────────────────────────────────────────────
 export default function ScoreEntry() {
@@ -95,6 +126,7 @@ export default function ScoreEntry() {
 
   const [activeTab,    setActiveTab]    = useState<string | null>(null)
   const [scoreMap,     setScoreMap]     = useState<ScoreMap>({})
+  const [statusMap,    setStatusMap]    = useState<StatusMap>({})
   const [isDirty,      setIsDirty]      = useState(false)
   const [saving,       setSaving]       = useState(false)
   const [saveMsg,      setSaveMsg]      = useState('')
@@ -126,6 +158,7 @@ export default function ScoreEntry() {
   useEffect(() => {
     if (!rows.length) return
     const map = initMap(rows)
+    const stMap = initStatusMap(rows)
     const latest = rows.reduce<string | null>(
       (acc, r) => (r.updated_at && (!acc || r.updated_at > acc) ? r.updated_at : acc), null)
     setBaseUpdatedAt(latest)
@@ -140,11 +173,13 @@ export default function ScoreEntry() {
             m[`s:${sid}`] = sv?.st ?? null
           }
           map[item.student_id] = m
+          if (item.status) stMap[item.student_id] = item.status
         }
         setQueuedSave(q)
         if (q.status === 'conflict') setConflict(true)
       }
       setScoreMap(map)
+      setStatusMap(stMap)
     })
   }, [rows, id])
   useEffect(() => { if (tabs.length && !activeTab) setActiveTab(tabs[0].key) }, [tabs, activeTab])
@@ -157,6 +192,13 @@ export default function ScoreEntry() {
     if (locked) return
     const val = raw === '' ? null : parseFloat(raw)
     setScoreMap(prev => ({ ...prev, [sid]: { ...prev[sid], [field]: isNaN(val as number) ? null : val } }))
+    setIsDirty(true)
+    setSaveMsg('')
+  }, [locked])
+
+  const setStudentStatus = useCallback((sid: string, st: StudentStatus) => {
+    if (locked) return
+    setStatusMap(prev => ({ ...prev, [sid]: st }))
     setIsDirty(true)
     setSaveMsg('')
   }, [locked])
@@ -176,6 +218,7 @@ export default function ScoreEntry() {
   function collectScores(): ScoreSaveItem[] {
     return rows.map(r => ({
       student_id: r.student_id,
+      status: statusMap[r.student_id] ?? 'present',
       ...unflatten(scoreMap[r.student_id]),
     }))
   }
@@ -232,8 +275,8 @@ export default function ScoreEntry() {
   if (mobileIdx !== null && tab && activeTab !== 'finale') {
     return (
       <MobileEditor
-        rows={rows} idx={mobileIdx} tab={tab} scoreMap={scoreMap}
-        onUpdate={update}
+        rows={rows} idx={mobileIdx} tab={tab} scoreMap={scoreMap} statusMap={statusMap}
+        onUpdate={update} onStatusChange={setStudentStatus} locked={locked}
         onClose={() => setMobileIdx(null)}
         onNavigate={setMobileIdx}
         isDirty={isDirty} saving={saving} saveMsg={saveMsg} onSave={() => save()}
@@ -423,21 +466,22 @@ export default function ScoreEntry() {
         ) : activeTab === 'finale' && template ? (
           <>
             <div className="md:hidden space-y-2 pt-1">
-              <MobileFinaleList rows={rows} tabs={tabs} template={template} scoreMap={scoreMap} />
+              <MobileFinaleList rows={rows} tabs={tabs} template={template} scoreMap={scoreMap} statusMap={statusMap} />
             </div>
             <div className="hidden md:block">
-              <DesktopFinale rows={rows} tabs={tabs} template={template} scoreMap={scoreMap} finaleLabel={finaleLabel} />
+              <DesktopFinale rows={rows} tabs={tabs} template={template} scoreMap={scoreMap} statusMap={statusMap} finaleLabel={finaleLabel} />
             </div>
           </>
         ) : tab ? (
           <div dir={dir}>
             <div className="md:hidden space-y-2 pt-1">
-              <MobileStudentList rows={visibleRows} tab={tab} scoreMap={scoreMap} onSelect={i => {
+              <MobileStudentList rows={visibleRows} tab={tab} scoreMap={scoreMap} statusMap={statusMap} onSelect={i => {
                 setMobileIdx(rows.indexOf(visibleRows[i]))
               }} />
             </div>
             <div className="hidden md:block">
-              <DesktopTable rows={visibleRows} tab={tab} scoreMap={scoreMap} onUpdate={update} />
+              <DesktopTable rows={visibleRows} tab={tab} scoreMap={scoreMap} statusMap={statusMap} locked={locked}
+                            onUpdate={update} onStatusChange={setStudentStatus} />
             </div>
           </div>
         ) : null}
@@ -447,17 +491,15 @@ export default function ScoreEntry() {
 }
 
 // ── Mobile: student list ───────────────────────────────────────────────────────
-function MobileStudentList({ rows, tab, scoreMap, onSelect }: {
-  rows: ScoreRow[]; tab: Tab; scoreMap: ScoreMap; onSelect: (i: number) => void
+function MobileStudentList({ rows, tab, scoreMap, statusMap, onSelect }: {
+  rows: ScoreRow[]; tab: Tab; scoreMap: ScoreMap; statusMap: StatusMap; onSelect: (i: number) => void
 }) {
   return (
     <>
       {rows.map((row, i) => {
+        const stBadge = statusLabel(statusMap[row.student_id])
         const total = tabTot(row.student_id, tab, scoreMap)
-        const hasScores = tab.subsections.some(s =>
-          s.fields.some(f => (scoreMap[row.student_id]?.[f.key] ?? null) !== null)
-          || (s.stField && (scoreMap[row.student_id]?.[s.stField] ?? null) !== null)
-        )
+        const hasScores = hasTabVal(row.student_id, tab, scoreMap)
         return (
           <button key={row.student_id} onClick={() => onSelect(i)}
                   className="w-full flex items-center justify-between bg-white border border-gray-200 rounded-xl px-4 py-3 text-left active:bg-gray-50 transition">
@@ -466,9 +508,15 @@ function MobileStudentList({ rows, tab, scoreMap, onSelect }: {
               <span className="arabic text-gray-900 font-medium">{row.student_name}</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className={`text-sm font-bold ${hasScores ? 'text-gray-800' : 'text-gray-300'}`}>
-                {hasScores ? total : '—'}
-              </span>
+              {stBadge ? (
+                <span className={`arabic text-xs font-bold px-2 py-0.5 rounded-full ${
+                  statusMap[row.student_id] === 'absent' ? 'bg-rose-100 text-rose-700' : 'bg-gray-200 text-gray-600'
+                }`}>{stBadge}</span>
+              ) : (
+                <span className={`text-sm font-bold ${hasScores ? 'text-gray-800' : 'text-gray-300'}`}>
+                  {hasScores ? fmt(total, true) : '—'}
+                </span>
+              )}
               <span className="text-gray-400 text-lg">›</span>
             </div>
           </button>
@@ -479,14 +527,18 @@ function MobileStudentList({ rows, tab, scoreMap, onSelect }: {
 }
 
 // ── Mobile: full-screen score editor ──────────────────────────────────────────
-function MobileEditor({ rows, idx, tab, scoreMap, onUpdate, onClose, onNavigate, isDirty, saving, saveMsg, onSave }: {
-  rows: ScoreRow[]; idx: number; tab: Tab; scoreMap: ScoreMap
+function MobileEditor({ rows, idx, tab, scoreMap, statusMap, locked, onUpdate, onStatusChange, onClose, onNavigate, isDirty, saving, saveMsg, onSave }: {
+  rows: ScoreRow[]; idx: number; tab: Tab; scoreMap: ScoreMap; statusMap: StatusMap; locked: boolean
   onUpdate: (sid: string, f: string, v: string) => void
+  onStatusChange: (sid: string, st: StudentStatus) => void
   onClose: () => void; onNavigate: (i: number) => void
   isDirty: boolean; saving: boolean; saveMsg: string; onSave: () => void
 }) {
   const row   = rows[idx]
+  const st    = statusMap[row.student_id] ?? 'present'
+  const isOut = st === 'absent' || st === 'exempt'
   const total = tabTot(row.student_id, tab, scoreMap)
+  const hasTab = hasTabVal(row.student_id, tab, scoreMap)
 
   return (
     <div className="fixed inset-0 bg-gray-50 z-50 flex flex-col">
@@ -505,17 +557,35 @@ function MobileEditor({ rows, idx, tab, scoreMap, onUpdate, onClose, onNavigate,
         </button>
       </div>
 
+      {/* Status bar */}
+      <div className="bg-white border-b border-gray-100 px-4 py-2 flex items-center justify-center gap-2 flex-shrink-0" dir="rtl">
+        {([
+          { key: 'present', label: 'حاضر', active: 'bg-blue-600 text-white border-blue-600' },
+          { key: 'absent',  label: 'غائب (غ)', active: 'bg-rose-600 text-white border-rose-600' },
+          { key: 'exempt',  label: 'معفى', active: 'bg-gray-700 text-white border-gray-700' },
+        ] as const).map(opt => (
+          <button key={opt.key} type="button" disabled={locked}
+                  onClick={() => onStatusChange(row.student_id, opt.key)}
+                  className={`arabic text-xs px-3 py-1 rounded-full border transition ${
+                    st === opt.key ? opt.active : 'bg-white text-gray-600 border-gray-200'
+                  }`}>
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
       {/* Score fields */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
+      <div className={`flex-1 overflow-y-auto p-4 space-y-3 transition-opacity ${isOut ? 'opacity-40 pointer-events-none' : ''}`}>
         {tab.subsections.map(sub => {
-          const st = subTot(row.student_id, sub, scoreMap)
+          const stVal = subTot(row.student_id, sub, scoreMap)
+          const subGraded = hasSubVal(row.student_id, sub, scoreMap)
           return (
             <div key={sub.secId} className={`${tab.pal.cardBg} border ${tab.pal.cardBorder} rounded-2xl p-4`}>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="font-semibold text-gray-800">{sub.label}</h3>
                 {(sub.bonusField || sub.stField) && (
                   <span className={`text-sm font-bold ${tab.pal.accentText}`}>
-                    S.T. {fmt(st)}
+                    S.T. {fmt(stVal, subGraded)}
                   </span>
                 )}
               </div>
@@ -580,7 +650,7 @@ function MobileEditor({ rows, idx, tab, scoreMap, onUpdate, onClose, onNavigate,
         {/* Total */}
         <div className={`${tab.pal.totalBg} rounded-2xl px-4 py-4 flex justify-between items-center`}>
           <span className="font-bold text-gray-800">Total {tab.label}</span>
-          <span className="text-2xl font-bold text-gray-900">{fmt(total)}</span>
+          <span className="text-2xl font-bold text-gray-900">{statusLabel(st) ?? fmt(total, hasTab)}</span>
         </div>
       </div>
 
@@ -600,14 +670,16 @@ function MobileEditor({ rows, idx, tab, scoreMap, onUpdate, onClose, onNavigate,
 }
 
 // ── Mobile: finale list ────────────────────────────────────────────────────────
-function MobileFinaleList({ rows, tabs, template, scoreMap }: {
-  rows: ScoreRow[]; tabs: Tab[]; template: TemplateDef; scoreMap: ScoreMap
+function MobileFinaleList({ rows, tabs, template, scoreMap, statusMap }: {
+  rows: ScoreRow[]; tabs: Tab[]; template: TemplateDef; scoreMap: ScoreMap; statusMap: StatusMap
 }) {
   return (
     <>
       {rows.map((row, i) => {
+        const stBadge = statusLabel(statusMap[row.student_id])
+        const graded = hasAnyVal(row.student_id, scoreMap)
         const totals = tabs.map(t => tabTot(row.student_id, t, scoreMap))
-        const final = finalFromGroupTotals(template, totals)
+        const final = stBadge ? null : finalFromGroupTotals(template, totals, graded)
         return (
           <div key={row.student_id} className="bg-white border border-gray-200 rounded-xl p-4">
             <div className="flex items-center justify-between mb-3">
@@ -615,13 +687,13 @@ function MobileFinaleList({ rows, tabs, template, scoreMap }: {
                 <span className="text-xs text-gray-400">{i + 1}</span>
                 <span className="arabic font-semibold text-gray-900">{row.student_name}</span>
               </div>
-              <span className="text-xl font-bold text-yellow-700">{fmt(final)}</span>
+              <span className="text-xl font-bold text-yellow-700">{stBadge ?? fmt(final, graded)}</span>
             </div>
             <div className={`grid gap-2 text-center text-xs`} style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
               {tabs.map((t, ti) => (
                 <div key={t.key} className={`${t.pal.dataBg} rounded-lg py-2`}>
                   <div className="text-gray-500 mb-0.5 truncate px-1">{t.label}</div>
-                  <div className="font-bold text-gray-800">{fmt(totals[ti])}</div>
+                  <div className="font-bold text-gray-800">{stBadge ?? fmt(totals[ti], hasTabVal(row.student_id, t, scoreMap))}</div>
                 </div>
               ))}
             </div>
@@ -633,16 +705,17 @@ function MobileFinaleList({ rows, tabs, template, scoreMap }: {
 }
 
 // ── Desktop: wide scrollable table ────────────────────────────────────────────
-function DesktopTable({ rows, tab, scoreMap, onUpdate }: {
-  rows: ScoreRow[]; tab: Tab; scoreMap: ScoreMap
+function DesktopTable({ rows, tab, scoreMap, statusMap, locked, onUpdate, onStatusChange }: {
+  rows: ScoreRow[]; tab: Tab; scoreMap: ScoreMap; statusMap: StatusMap; locked: boolean
   onUpdate: (sid: string, f: string, v: string) => void
+  onStatusChange: (sid: string, st: StudentStatus) => void
 }) {
   return (
     <div className="rounded-b-xl rounded-tr-xl border border-gray-200 overflow-auto bg-white">
       <table className="text-sm border-collapse min-w-max">
         <thead>
           <tr>
-            <th className="bg-gray-100 border border-gray-200 px-3 py-2 text-right font-medium text-gray-600 min-w-[200px] sticky left-0 z-10">
+            <th className="bg-gray-100 border border-gray-200 px-3 py-2 text-right font-medium text-gray-600 min-w-[220px] sticky start-0 z-10">
               التلاميذ
             </th>
             {tab.subsections.map(sub => (
@@ -657,7 +730,7 @@ function DesktopTable({ rows, tab, scoreMap, onUpdate }: {
             </th>
           </tr>
           <tr>
-            <th className="bg-gray-100 border border-gray-200 sticky left-0 z-10" />
+            <th className="bg-gray-100 border border-gray-200 sticky start-0 z-10" />
             {tab.subsections.map(sub => (
               <>
                 {sub.fields.map(f => (
@@ -673,17 +746,39 @@ function DesktopTable({ rows, tab, scoreMap, onUpdate }: {
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, i) => (
-            <tr key={row.student_id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-              <td className={`arabic border border-gray-200 px-3 py-1.5 text-right sticky left-0 z-10 font-medium ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                <span className="text-gray-400 text-xs mr-2">{i + 1}</span>{row.student_name}
+          {rows.map((row, i) => {
+            const st = statusMap[row.student_id] ?? 'present'
+            const stBadge = statusLabel(st)
+            const isOut = st === 'absent' || st === 'exempt'
+            const tabGraded = hasTabVal(row.student_id, tab, scoreMap)
+            return (
+            <tr key={row.student_id} className={`group ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+              <td className={`arabic border border-gray-200 px-3 py-1.5 text-right sticky start-0 z-10 font-medium ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                <div className="flex items-center justify-between gap-2">
+                  <span><span className="text-gray-400 text-xs mx-1.5">{i + 1}</span>{row.student_name}</span>
+                  <button
+                    type="button"
+                    disabled={locked}
+                    onClick={() => onStatusChange(row.student_id, nextStatus(st))}
+                    title="تغيير الحالة: حاضر / غائب / معفى"
+                    className={`arabic text-[10px] px-1.5 py-0.5 rounded-full font-semibold transition flex-shrink-0 ${
+                      st === 'absent'
+                        ? 'bg-rose-100 text-rose-700 hover:bg-rose-200'
+                        : st === 'exempt'
+                        ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                        : 'text-gray-300 opacity-0 group-hover:opacity-100 hover:bg-gray-100 hover:text-gray-600'
+                    }`}
+                  >
+                    {stBadge ?? 'حاضر'}
+                  </button>
+                </div>
               </td>
               {tab.subsections.map(sub => (
                 <>
                   {sub.fields.map(f => (
-                    <td key={f.key} className={`border border-gray-200 p-0 ${tab.pal.dataBg}`}>
+                    <td key={f.key} className={`border border-gray-200 p-0 ${tab.pal.dataBg} ${isOut ? 'opacity-35' : ''}`}>
                       <input
-                        type="number" min={0} step={0.25}
+                        type="number" min={0} step={0.25} disabled={locked || isOut}
                         data-row={i} data-field={f.key}
                         className="score-input h-8 px-1 w-14"
                         value={scoreMap[row.student_id]?.[f.key] ?? ''}
@@ -699,9 +794,9 @@ function DesktopTable({ rows, tab, scoreMap, onUpdate }: {
                     </td>
                   ))}
                   {sub.bonusField && (
-                    <td key={`${sub.secId}-b`} className="border border-gray-200 p-0 bg-[#E2EFDA]">
+                    <td key={`${sub.secId}-b`} className={`border border-gray-200 p-0 bg-[#E2EFDA] ${isOut ? 'opacity-35' : ''}`}>
                       <input
-                        type="number" min={0} step={0.25}
+                        type="number" min={0} step={0.25} disabled={locked || isOut}
                         data-row={i} data-field={sub.bonusField}
                         className="score-input h-8 px-1 w-14"
                         value={scoreMap[row.student_id]?.[sub.bonusField] ?? ''}
@@ -717,13 +812,13 @@ function DesktopTable({ rows, tab, scoreMap, onUpdate }: {
                     </td>
                   )}
                   {(sub.bonusField || sub.stField) && (
-                    <td key={`${sub.secId}-s`} className={`${tab.pal.stBg} border border-gray-200 p-0`}>
+                    <td key={`${sub.secId}-s`} className={`${tab.pal.stBg} border border-gray-200 p-0 ${isOut ? 'opacity-35' : ''}`}>
                       {sub.stField ? (
                         <input
-                          type="number" min={0} step={0.25}
+                          type="number" min={0} step={0.25} disabled={locked || isOut}
                           data-row={i} data-field={sub.stField}
                           className="score-input h-8 px-1 w-16 font-bold"
-                          placeholder={isDirect(row.student_id, sub, scoreMap) ? '' : fmt(subTot(row.student_id, sub, scoreMap))}
+                          placeholder={isDirect(row.student_id, sub, scoreMap) ? '' : fmt(subTot(row.student_id, sub, scoreMap), hasSubVal(row.student_id, sub, scoreMap))}
                           value={scoreMap[row.student_id]?.[sub.stField] ?? ''}
                           onFocus={e => e.target.select()}
                           onKeyDown={e => {
@@ -736,7 +831,7 @@ function DesktopTable({ rows, tab, scoreMap, onUpdate }: {
                         />
                       ) : (
                         <span className="block px-2 text-center font-bold text-gray-800 text-sm">
-                          {fmt(subTot(row.student_id, sub, scoreMap))}
+                          {fmt(subTot(row.student_id, sub, scoreMap), hasSubVal(row.student_id, sub, scoreMap))}
                         </span>
                       )}
                     </td>
@@ -744,10 +839,11 @@ function DesktopTable({ rows, tab, scoreMap, onUpdate }: {
                 </>
               ))}
               <td className={`${tab.pal.totalBg} border border-gray-200 px-2 py-1.5 text-center font-bold text-gray-800`}>
-                {fmt(tabTot(row.student_id, tab, scoreMap))}
+                {stBadge ?? fmt(tabTot(row.student_id, tab, scoreMap), tabGraded)}
               </td>
             </tr>
-          ))}
+            )
+          })}
         </tbody>
       </table>
     </div>
@@ -755,15 +851,15 @@ function DesktopTable({ rows, tab, scoreMap, onUpdate }: {
 }
 
 // ── Desktop: finale table ──────────────────────────────────────────────────────
-function DesktopFinale({ rows, tabs, template, scoreMap, finaleLabel }: {
-  rows: ScoreRow[]; tabs: Tab[]; template: TemplateDef; scoreMap: ScoreMap; finaleLabel: string
+function DesktopFinale({ rows, tabs, template, scoreMap, statusMap, finaleLabel }: {
+  rows: ScoreRow[]; tabs: Tab[]; template: TemplateDef; scoreMap: ScoreMap; statusMap: StatusMap; finaleLabel: string
 }) {
   return (
     <div className="rounded-xl border border-gray-200 overflow-auto bg-white">
       <table className="text-sm border-collapse min-w-max">
         <thead>
           <tr>
-            <th className="bg-gray-100 border border-gray-200 px-4 py-2.5 text-right font-medium text-gray-700 min-w-[200px] sticky left-0">
+            <th className="bg-gray-100 border border-gray-200 px-4 py-2.5 text-right font-medium text-gray-700 min-w-[200px] sticky start-0">
               التلاميذ
             </th>
             {tabs.map(t => (
@@ -778,17 +874,23 @@ function DesktopFinale({ rows, tabs, template, scoreMap, finaleLabel }: {
         </thead>
         <tbody>
           {rows.map((row, i) => {
+            const stBadge = statusLabel(statusMap[row.student_id])
+            const graded = hasAnyVal(row.student_id, scoreMap)
             const totals = tabs.map(t => tabTot(row.student_id, t, scoreMap))
-            const final = finalFromGroupTotals(template, totals)
+            const final = stBadge ? null : finalFromGroupTotals(template, totals, graded)
             return (
               <tr key={row.student_id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                <td className={`arabic border border-gray-200 px-4 py-2 text-right font-medium sticky left-0 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
-                  <span className="text-gray-400 text-xs mr-2">{i + 1}</span>{row.student_name}
+                <td className={`arabic border border-gray-200 px-4 py-2 text-right font-medium sticky start-0 ${i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}`}>
+                  <span className="text-gray-400 text-xs mx-2">{i + 1}</span>{row.student_name}
                 </td>
                 {tabs.map((t, ti) => (
-                  <td key={t.key} className={`${t.pal.dataBg} border border-gray-200 px-4 py-2 text-center`}>{fmt(totals[ti])}</td>
+                  <td key={t.key} className={`${t.pal.dataBg} border border-gray-200 px-4 py-2 text-center`}>
+                    {stBadge ?? fmt(totals[ti], hasTabVal(row.student_id, t, scoreMap))}
+                  </td>
                 ))}
-                <td className="bg-finale-light border border-gray-200 px-4 py-2 text-center font-bold text-gray-900 text-base">{fmt(final)}</td>
+                <td className="bg-finale-light border border-gray-200 px-4 py-2 text-center font-bold text-gray-900 text-base">
+                  {stBadge ?? fmt(final, graded)}
+                </td>
               </tr>
             )
           })}

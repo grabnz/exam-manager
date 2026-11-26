@@ -2,11 +2,11 @@ import { useEffect, useMemo } from 'react'
 import { useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api, SessionInfo, ScoreRow, SettingsData, TemplateDef } from '../api/client'
-import { groups as templateGroups, groupTotal, finalFromGroupTotals, StudentValues } from '../lib/grid'
+import { groups as templateGroups, groupTotal, finalFromGroupTotals, hasAnyValue, StudentValues } from '../lib/grid'
 import { palette } from '../lib/palette'
 
-function fmt(n: number | null): string {
-  return n != null && n > 0 ? n.toFixed(2).replace(/\.00$/, '') : '—'
+function fmt(n: number | null, graded = true): string {
+  return graded && n != null ? n.toFixed(2).replace(/\.00$/, '') : '—'
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -105,9 +105,13 @@ export default function PrintFinale() {
           </thead>
           <tbody>
             {rows.map((row, i) => {
-              const vals: StudentValues = { criteria: row.criteria, sections: row.sections }
+              const vals: StudentValues = { criteria: row.criteria, sections: row.sections, status: row.status }
+              const graded = hasAnyValue(vals)
+              const isAbsent = row.status === 'absent'
+              const isExempt = row.status === 'exempt'
+              const statusBadge = isAbsent ? 'غ' : isExempt ? 'معفى' : null
               const totals = tplGroups.map(g => groupTotal(g, vals))
-              const final = finalFromGroupTotals(template, totals)
+              const final = statusBadge ? null : finalFromGroupTotals(template, totals, graded)
               return (
                 <tr key={row.student_id} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
                   <td className="border border-gray-300 px-3 py-2 text-center text-gray-400 text-xs">{i + 1}</td>
@@ -115,10 +119,12 @@ export default function PrintFinale() {
                   {tplGroups.map((g, gi) => (
                     <td key={g.key}
                         className={`border border-gray-300 px-3 py-2 text-center ${palette(g.sections[0]?.color_key, gi).printBg}`}>
-                      {fmt(totals[gi])}
+                      {statusBadge ?? fmt(totals[gi], graded)}
                     </td>
                   ))}
-                  <td className="border border-gray-300 px-3 py-2 text-center bg-yellow-50 font-bold text-base">{fmt(final)}</td>
+                  <td className="border border-gray-300 px-3 py-2 text-center bg-yellow-50 font-bold text-base">
+                    {statusBadge ?? fmt(final, graded)}
+                  </td>
                   <td className="border border-gray-300 px-3 py-2" />
                 </tr>
               )

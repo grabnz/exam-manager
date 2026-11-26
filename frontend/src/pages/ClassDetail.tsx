@@ -27,6 +27,9 @@ export default function ClassDetail() {
   const [deletingS,  setDeletingS]  = useState<string | null>(null)
   const [newStudent, setNewStudent] = useState('')
   const [addingStudent, setAddingStudent] = useState(false)
+  const [bulkOpen, setBulkOpen] = useState(false)
+  const [bulkText, setBulkText] = useState('')
+  const [bulkAdding, setBulkAdding] = useState(false)
 
   const { data, isLoading, error } = useQuery<ClassDetailType>({
     queryKey: ['class', id],
@@ -116,6 +119,30 @@ export default function ClassDetail() {
       await qc.invalidateQueries({ queryKey: ['class', id] })
     } finally {
       setAddingStudent(false)
+    }
+  }
+
+  function parseBulkNames(raw: string): string[] {
+    return raw
+      .split(/\r?\n/)
+      .map(line => line.split(/[,\t;]/)[0]?.trim() ?? '')
+      .map(s => s.replace(/^\d+[\s.\-)]+/, '').trim())
+      .filter(Boolean)
+  }
+
+  async function addBulkStudents(e: React.FormEvent) {
+    e.preventDefault()
+    const names = parseBulkNames(bulkText)
+    if (names.length === 0) return
+    setBulkAdding(true)
+    try {
+      await api.students.bulkAdd(id!, names)
+      setBulkText('')
+      setBulkOpen(false)
+      await qc.invalidateQueries({ queryKey: ['class', id] })
+      await qc.invalidateQueries({ queryKey: ['classes'] })
+    } finally {
+      setBulkAdding(false)
     }
   }
 
@@ -264,9 +291,63 @@ export default function ClassDetail() {
 
         {/* Student list */}
         <div>
-          <h2 className="arabic text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4 text-right" dir="rtl">
-            قائمة التلاميذ ({data.students.length})
-          </h2>
+          <div className="flex items-center justify-between mb-4" dir="rtl">
+            <h2 className="arabic text-sm font-semibold text-gray-500 uppercase tracking-wider">
+              قائمة التلاميذ ({data.students.length})
+            </h2>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setBulkOpen(v => !v)}
+                className="arabic text-xs font-medium text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-2.5 py-1 rounded-lg transition"
+              >
+                {bulkOpen ? 'إغلاق' : '+ إضافة جماعية'}
+              </button>
+            )}
+          </div>
+          {isAdmin && bulkOpen && (
+            <form onSubmit={addBulkStudents} className="mb-3 bg-white border border-blue-200 rounded-xl p-3 space-y-2" dir="rtl">
+              <div className="flex items-center justify-between">
+                <label className="arabic text-xs font-medium text-gray-600">
+                  لصق الأسماء (اسم في كل سطر)
+                </label>
+                <label className="arabic text-xs text-blue-600 hover:underline cursor-pointer">
+                  ⬆ ملف CSV/TXT
+                  <input
+                    type="file"
+                    accept=".csv,.txt"
+                    className="hidden"
+                    onChange={async e => {
+                      const f = e.target.files?.[0]
+                      if (!f) return
+                      const txt = await f.text()
+                      setBulkText(prev => (prev ? prev + '\n' + txt : txt))
+                      e.target.value = ''
+                    }}
+                  />
+                </label>
+              </div>
+              <textarea
+                rows={5}
+                value={bulkText}
+                onChange={e => setBulkText(e.target.value)}
+                placeholder={"أحمد بن علي\nمريم الطرابلسي\nيوسف المنصوري"}
+                className="arabic w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-400"
+              />
+              <div className="flex items-center justify-between">
+                <span className="arabic text-xs text-gray-400">
+                  {parseBulkNames(bulkText).length} تلميذ جاهز للإضافة
+                </span>
+                <button
+                  type="submit"
+                  disabled={bulkAdding || parseBulkNames(bulkText).length === 0}
+                  className="arabic px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg text-xs font-medium"
+                >
+                  {bulkAdding ? 'جاري الإضافة…' : 'إضافة الكل'}
+                </button>
+              </div>
+            </form>
+          )}
           <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
             <div className="max-h-[520px] overflow-y-auto">
               {data.students.map((s, i) => (

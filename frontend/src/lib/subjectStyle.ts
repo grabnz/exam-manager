@@ -1,28 +1,102 @@
-// Visual identity per subject — icon + gradient for the dashboard cards
-// (inspired by school-app subject tiles).
+// Visual identity per subject — stroke icon + soft pastel palette
+// (clean card style: light tinted card, circular icon badge).
+import type { ComponentType, SVGProps } from 'react'
+import {
+  BookOpenIcon, CalculatorIcon, FlaskIcon, PenLineIcon, GlobeIcon,
+  CrescentIcon, ScaleIcon, LandmarkIcon, MapIcon, PaletteIcon,
+  MusicIcon, ActivityIcon, FileIcon,
+} from '../components/icons'
 
 export interface SubjectStyle {
-  icon: string
-  gradient: string   // tailwind gradient classes
-  chip: string       // soft chip colors for compact contexts
+  Icon: ComponentType<SVGProps<SVGSVGElement>>
+  card: string     // pastel card surface
+  badge: string    // circular icon badge
+  text: string     // accent text
+  chip: string     // compact chip
+  block: string    // timetable block
 }
 
 const STYLES: Record<string, SubjectStyle> = {
-  arabe:      { icon: '📖', gradient: 'from-emerald-500 to-green-600',  chip: 'bg-emerald-50 text-emerald-700' },
-  math:       { icon: '➗', gradient: 'from-orange-400 to-amber-500',   chip: 'bg-orange-50 text-orange-700' },
-  eveil:      { icon: '🔬', gradient: 'from-cyan-500 to-teal-600',      chip: 'bg-cyan-50 text-cyan-700' },
-  francais:   { icon: '🖋️', gradient: 'from-blue-500 to-indigo-600',    chip: 'bg-blue-50 text-blue-700' },
-  anglais:    { icon: '🗣️', gradient: 'from-violet-500 to-purple-600',  chip: 'bg-violet-50 text-violet-700' },
-  islamique:  { icon: '🕌', gradient: 'from-green-600 to-emerald-700',  chip: 'bg-green-50 text-green-700' },
-  civique:    { icon: '⚖️', gradient: 'from-amber-500 to-yellow-600',   chip: 'bg-amber-50 text-amber-700' },
-  histoire:   { icon: '🏛️', gradient: 'from-rose-500 to-pink-600',      chip: 'bg-rose-50 text-rose-700' },
-  geographie: { icon: '🗺️', gradient: 'from-sky-500 to-blue-600',       chip: 'bg-sky-50 text-sky-700' },
-  arts:       { icon: '🎨', gradient: 'from-fuchsia-500 to-pink-600',   chip: 'bg-fuchsia-50 text-fuchsia-700' },
-  musique:    { icon: '🎵', gradient: 'from-purple-500 to-violet-600',  chip: 'bg-purple-50 text-purple-700' },
-  sport:      { icon: '⚽', gradient: 'from-lime-500 to-green-500',     chip: 'bg-lime-50 text-lime-700' },
+  arabe: {
+    Icon: BookOpenIcon,
+    card: 'bg-emerald-50/70 border-emerald-100', badge: 'bg-emerald-100 text-emerald-600',
+    text: 'text-emerald-700', chip: 'bg-emerald-50 text-emerald-700',
+    block: 'bg-emerald-100/80 border-emerald-300 text-emerald-900',
+  },
+  math: {
+    Icon: CalculatorIcon,
+    card: 'bg-orange-50/70 border-orange-100', badge: 'bg-orange-100 text-orange-600',
+    text: 'text-orange-700', chip: 'bg-orange-50 text-orange-700',
+    block: 'bg-orange-100/80 border-orange-300 text-orange-900',
+  },
+  eveil: {
+    Icon: FlaskIcon,
+    card: 'bg-cyan-50/70 border-cyan-100', badge: 'bg-cyan-100 text-cyan-600',
+    text: 'text-cyan-700', chip: 'bg-cyan-50 text-cyan-700',
+    block: 'bg-cyan-100/80 border-cyan-300 text-cyan-900',
+  },
+  francais: {
+    Icon: PenLineIcon,
+    card: 'bg-blue-50/70 border-blue-100', badge: 'bg-blue-100 text-blue-600',
+    text: 'text-blue-700', chip: 'bg-blue-50 text-blue-700',
+    block: 'bg-blue-100/80 border-blue-300 text-blue-900',
+  },
+  anglais: {
+    Icon: GlobeIcon,
+    card: 'bg-violet-50/70 border-violet-100', badge: 'bg-violet-100 text-violet-600',
+    text: 'text-violet-700', chip: 'bg-violet-50 text-violet-700',
+    block: 'bg-violet-100/80 border-violet-300 text-violet-900',
+  },
+  islamique: {
+    Icon: CrescentIcon,
+    card: 'bg-green-50/70 border-green-100', badge: 'bg-green-100 text-green-700',
+    text: 'text-green-700', chip: 'bg-green-50 text-green-700',
+    block: 'bg-green-100/80 border-green-300 text-green-900',
+  },
+  civique: {
+    Icon: ScaleIcon,
+    card: 'bg-amber-50/70 border-amber-100', badge: 'bg-amber-100 text-amber-600',
+    text: 'text-amber-700', chip: 'bg-amber-50 text-amber-700',
+    block: 'bg-amber-100/80 border-amber-300 text-amber-900',
+  },
+  histoire: {
+    Icon: LandmarkIcon,
+    card: 'bg-rose-50/70 border-rose-100', badge: 'bg-rose-100 text-rose-600',
+    text: 'text-rose-700', chip: 'bg-rose-50 text-rose-700',
+    block: 'bg-rose-100/80 border-rose-300 text-rose-900',
+  },
+  geographie: {
+    Icon: MapIcon,
+    card: 'bg-sky-50/70 border-sky-100', badge: 'bg-sky-100 text-sky-600',
+    text: 'text-sky-700', chip: 'bg-sky-50 text-sky-700',
+    block: 'bg-sky-100/80 border-sky-300 text-sky-900',
+  },
+  arts: {
+    Icon: PaletteIcon,
+    card: 'bg-fuchsia-50/70 border-fuchsia-100', badge: 'bg-fuchsia-100 text-fuchsia-600',
+    text: 'text-fuchsia-700', chip: 'bg-fuchsia-50 text-fuchsia-700',
+    block: 'bg-fuchsia-100/80 border-fuchsia-300 text-fuchsia-900',
+  },
+  musique: {
+    Icon: MusicIcon,
+    card: 'bg-purple-50/70 border-purple-100', badge: 'bg-purple-100 text-purple-600',
+    text: 'text-purple-700', chip: 'bg-purple-50 text-purple-700',
+    block: 'bg-purple-100/80 border-purple-300 text-purple-900',
+  },
+  sport: {
+    Icon: ActivityIcon,
+    card: 'bg-lime-50/70 border-lime-100', badge: 'bg-lime-100 text-lime-700',
+    text: 'text-lime-700', chip: 'bg-lime-50 text-lime-700',
+    block: 'bg-lime-100/80 border-lime-300 text-lime-900',
+  },
 }
 
-const DEFAULT: SubjectStyle = { icon: '📋', gradient: 'from-slate-500 to-gray-600', chip: 'bg-gray-100 text-gray-600' }
+const DEFAULT: SubjectStyle = {
+  Icon: FileIcon,
+  card: 'bg-slate-50/70 border-slate-200', badge: 'bg-slate-100 text-slate-500',
+  text: 'text-slate-600', chip: 'bg-slate-100 text-slate-600',
+  block: 'bg-slate-100/80 border-slate-300 text-slate-800',
+}
 
 export function subjectStyle(code: string | null | undefined): SubjectStyle {
   return (code && STYLES[code]) || DEFAULT

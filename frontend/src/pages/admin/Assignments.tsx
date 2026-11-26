@@ -53,6 +53,7 @@ export default function Assignments() {
         teachers={teachers}
         classes={classes}
         subjects={subjects}
+        existingByClass={byClass}
         onAdd={(teacherId, classId, subjectIds) =>
           run(() => api.assignments.create(teacherId, classId, subjectIds))}
       />
@@ -101,10 +102,14 @@ export default function Assignments() {
   )
 }
 
-function AddAssignmentForm({ teachers, classes, subjects, onAdd }: {
+const ARABIC_PACK = new Set(['arabe', 'islamique', 'civique', 'histoire', 'geographie'])
+const SCI_FR_PACK = new Set(['math', 'eveil', 'francais', 'anglais'])
+
+function AddAssignmentForm({ teachers, classes, subjects, existingByClass, onAdd }: {
   teachers: { id: string; full_name: string; username: string }[]
   classes:  { id: string; name: string; year: string }[]
   subjects: Subject[]
+  existingByClass: Map<string, AssignmentRow[]>
   onAdd: (teacherId: string, classId: string, subjectIds: string[]) => Promise<void> | void
 }) {
   const [open,       setOpen]       = useState(false)
@@ -112,12 +117,18 @@ function AddAssignmentForm({ teachers, classes, subjects, onAdd }: {
   const [classId,    setClassId]    = useState('')
   const [subjectIds, setSubjectIds] = useState<Set<string>>(new Set())
 
+  const alreadyAssigned = new Set((existingByClass.get(classId) ?? []).map(a => a.subject_id))
+
   function toggleSubject(id: string) {
     setSubjectIds(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id); else next.add(id)
       return next
     })
+  }
+
+  function applyPreset(filterFn: (s: Subject) => boolean) {
+    setSubjectIds(new Set(subjects.filter(filterFn).map(s => s.id)))
   }
 
   async function submit(e: React.FormEvent) {
@@ -160,24 +171,52 @@ function AddAssignmentForm({ teachers, classes, subjects, onAdd }: {
       </div>
 
       <div>
-        <label className="arabic block text-xs font-medium text-gray-600 mb-2">
-          المواد (يمكن اختيار عدة مواد — معلم السنة الأولى مثلاً يدرّس كل المواد)
-        </label>
-        <div className="flex flex-wrap gap-2">
-          {subjects.map(s => (
-            <button
-              type="button"
-              key={s.id}
-              onClick={() => toggleSubject(s.id)}
-              className={`arabic text-xs px-3 py-1.5 rounded-full border transition ${
-                subjectIds.has(s.id)
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
-              }`}
-            >
-              {s.name_ar}
+        <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
+          <label className="arabic text-xs font-medium text-gray-600">
+            المواد (يمكن اختيار عدة مواد أو استعمال اختصار جاهز)
+          </label>
+          <div className="flex flex-wrap gap-1.5">
+            <button type="button" onClick={() => applyPreset(() => true)}
+                    className="arabic text-[11px] px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium">
+              كل المواد (معلم فصل)
             </button>
-          ))}
+            <button type="button" onClick={() => applyPreset(s => ARABIC_PACK.has(s.code))}
+                    className="arabic text-[11px] px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-medium">
+              مواد العربية
+            </button>
+            <button type="button" onClick={() => applyPreset(s => SCI_FR_PACK.has(s.code))}
+                    className="arabic text-[11px] px-2.5 py-1 rounded-lg bg-violet-50 text-violet-700 hover:bg-violet-100 font-medium">
+              العلمية والفرنسية
+            </button>
+            {subjectIds.size > 0 && (
+              <button type="button" onClick={() => setSubjectIds(new Set())}
+                      className="arabic text-[11px] px-2 py-1 rounded-lg text-gray-400 hover:text-gray-600">
+                مسح
+              </button>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {subjects.map(s => {
+            const isAssigned = alreadyAssigned.has(s.id)
+            return (
+              <button
+                type="button"
+                key={s.id}
+                onClick={() => toggleSubject(s.id)}
+                title={isAssigned ? 'مادة مسندة مسبقاً لهذا القسم' : undefined}
+                className={`arabic text-xs px-3 py-1.5 rounded-full border transition ${
+                  subjectIds.has(s.id)
+                    ? 'bg-blue-600 text-white border-blue-600'
+                    : isAssigned
+                    ? 'bg-gray-50 text-gray-400 border-dashed border-gray-300 hover:border-blue-300'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                }`}
+              >
+                {s.name_ar}{isAssigned && !subjectIds.has(s.id) ? ' ✓' : ''}
+              </button>
+            )
+          })}
         </div>
       </div>
 

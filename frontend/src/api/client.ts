@@ -1,4 +1,4 @@
-import type { TemplateDef, StudentValues, SectionValues } from '../lib/grid'
+import type { TemplateDef, StudentValues, SectionValues, StudentStatus } from '../lib/grid'
 
 const BASE = (import.meta.env.VITE_API_URL ?? '') + '/api'
 
@@ -117,6 +117,16 @@ export interface DocumentRow {
   id: string; title: string; filename: string; content_type: string
   size: number; by: string | null; created_at: string | null
 }
+export interface TimetableSlot {
+  id: string
+  teacher_id: string; teacher_name: string | null
+  class_id: string | null; class_name: string | null
+  subject_id: string | null; subject_code: string | null; subject_name: string | null
+  day: number            // ISO 1=Monday … 7=Sunday
+  start: string; end: string
+  room: string; label: string
+}
+export interface ScoreBucket { label: string; count: number }
 
 // ── Dashboard stats ──────────────────────────────────────────────────────────
 export interface PairStats {
@@ -130,11 +140,13 @@ export interface PairStats {
 }
 export interface TeacherStats {
   role: 'teacher'
+  distribution: ScoreBucket[]
   totals: { classes: number; subjects: number; students: number; completion_pct: number }
   cards: PairStats[]
 }
 export interface DirectorStats {
   role: 'director'
+  distribution: ScoreBucket[]
   totals: { teachers: number; classes: number; students: number; sessions: number; completion_pct: number }
   alerts: { unassigned_classes: { id: string; name: string }[] }
   subject_averages: { subject_name: string; avg: number | null }[]
@@ -163,12 +175,13 @@ export interface SessionInfo {
   is_admin: boolean
 }
 
-export type { TemplateDef, StudentValues, SectionValues } from '../lib/grid'
+export type { TemplateDef, StudentValues, SectionValues, StudentStatus } from '../lib/grid'
 
 export interface ScoreRow {
   student_id: string; student_name: string; order_index: number
   criteria: Record<string, number | null>
   sections: Record<string, SectionValues>
+  status?: StudentStatus
   final_score: number | null
   updated_at: string | null
 }
@@ -177,6 +190,7 @@ export interface ScoreSaveItem {
   student_id: string
   criteria: Record<string, number | null>
   sections: Record<string, SectionValues>
+  status?: StudentStatus
 }
 
 // Director template editor payload
@@ -276,6 +290,19 @@ export const api = {
       }),
     delete: (id: string) => req<{ ok: boolean }>(`/events/${id}`, { method: 'DELETE' }),
   },
+  timetable: {
+    list: () => req<TimetableSlot[]>('/timetable'),
+    create: (data: {
+      teacher_id: string; class_id?: string | null; subject_id?: string | null
+      day: number; start: string; end: string; room?: string; label?: string
+    }) =>
+      req<TimetableSlot>('/timetable', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) => req<{ ok: boolean }>(`/timetable/${id}`, { method: 'DELETE' }),
+  },
   documents: {
     list: () => req<DocumentRow[]>('/documents'),
     upload: (file: File, title: string) => {
@@ -336,6 +363,12 @@ export const api = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ full_name: fullName }),
+      }),
+    bulkAdd: (classId: string, names: string[]) =>
+      req<Student[]>(`/classes/${classId}/students/bulk`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ names }),
       }),
     rename: (id: string, fullName: string) =>
       req<{ ok: boolean }>(`/students/${id}`, {

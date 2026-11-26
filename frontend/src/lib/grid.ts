@@ -21,10 +21,18 @@ export interface TemplateDef {
   sections: SectionDef[]
 }
 
+export type StudentStatus = 'present' | 'absent' | 'exempt'
+
 export interface SectionValues { bonus: number | null; st: number | null }
 export interface StudentValues {
   criteria: Record<string, number | null>
   sections: Record<string, SectionValues>
+  status?: StudentStatus
+}
+
+export function hasAnyValue(vals: StudentValues): boolean {
+  if (Object.values(vals.criteria).some(v => v != null)) return true
+  return Object.values(vals.sections).some(sv => sv && (sv.bonus != null || sv.st != null))
 }
 
 export interface GroupDef { key: string; label: string; sections: SectionDef[] }
@@ -60,8 +68,10 @@ export function groupTotal(g: GroupDef, vals: StudentValues): number {
   return g.sections.reduce((s, sec) => s + sectionSubtotal(sec, vals), 0)
 }
 
-export function finalFromGroupTotals(tpl: TemplateDef, totals: number[]): number | null {
-  if (totals.length === 0 || !totals.some(t => t > 0)) return null
+export function finalFromGroupTotals(tpl: TemplateDef, totals: number[], hasValues?: boolean): number | null {
+  if (totals.length === 0) return null
+  const graded = hasValues !== undefined ? hasValues : totals.some(t => t > 0)
+  if (!graded) return null
   if (tpl.final_formula === 'avg_groups') {
     return Math.round((totals.reduce((a, b) => a + b, 0) / totals.length) * 100) / 100
   }
@@ -71,7 +81,8 @@ export function finalFromGroupTotals(tpl: TemplateDef, totals: number[]): number
 }
 
 export function finalScore(tpl: TemplateDef, vals: StudentValues): number | null {
-  return finalFromGroupTotals(tpl, groups(tpl).map(g => groupTotal(g, vals)))
+  if (vals.status === 'absent' || vals.status === 'exempt') return null
+  return finalFromGroupTotals(tpl, groups(tpl).map(g => groupTotal(g, vals)), hasAnyValue(vals))
 }
 
 export function emptyValues(): StudentValues {
