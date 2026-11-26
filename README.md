@@ -4,7 +4,7 @@ School-wide score management for Tunisian primary schools (التقييم بال
 director → teachers → classes → pupils, multi-subject grids, offline-capable
 classroom score entry, Excel export and printable finale sheets.
 
-- **Backend:** FastAPI + SQLAlchemy — SQLite locally, PostgreSQL (Neon) in production, deployed as a Vercel serverless function (`backend/api/index.py`).
+- **Backend:** Go (`net/http` + GORM) — pure-Go SQLite locally (no CGO), PostgreSQL (Neon) in production; dual entrypoint for standalone binary (`cmd/server/main.go`) and Vercel Go serverless (`api/index.go`).
 - **Frontend:** React + Vite + Tailwind (Arabic RTL), installable **PWA** that works offline, deployed on Vercel.
 - **National scale-up:** see [NATIONAL_ARCHITECTURE.md](NATIONAL_ARCHITECTURE.md).
 
@@ -60,10 +60,9 @@ Generate a secret key: `python -c "import secrets; print(secrets.token_urlsafe(4
 ## Local development
 
 ```bash
-# Backend
+# Backend (Go)
 cd backend
-pip install -r requirements.txt
-python -m uvicorn app.main:app --reload --port 8000
+go run ./cmd/server
 
 # Frontend (separate terminal)
 cd frontend
