@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react'
 import { api, TeacherProfile } from '../api/client'
 import { useAuth } from '../auth'
 import AppShell from '../components/AppShell'
+import { ListSkeleton } from '../components/Skeleton'
+import { CheckIcon, UserIcon } from '../components/icons'
 
 const GRADES = [
   'معلم',
@@ -31,26 +33,29 @@ export default function Profile() {
     setTimeout(() => setSaved(false), 3000)
   }
 
+  const initial = (form.name || user?.full_name || user?.username || '؟').trim().charAt(0)
+
   return (
     <AppShell title="الملف الشخصي" subtitle="بيانات المعلم والرتبة">
       <div className="max-w-lg">
         {loading ? (
-          <div className="flex justify-center py-20">
-            <div className="animate-spin w-8 h-8 border-4 border-brand border-t-transparent rounded-full" />
-          </div>
+          <ListSkeleton rows={4} />
         ) : (
           <div className="bg-surface border border-line rounded-3xl p-6 space-y-5 shadow-card">
-
-            {/* Avatar placeholder */}
-            <div className="flex justify-center">
-              <div className="w-20 h-20 rounded-full bg-blue-100 flex items-center justify-center text-3xl">
-                👩‍🏫
+            {/* Avatar badge */}
+            <div className="flex flex-col items-center gap-2 pb-2 border-b border-line">
+              <div className="w-20 h-20 rounded-3xl bg-gradient-to-br from-brand to-brand-hover text-white flex items-center justify-center text-2xl font-bold shadow-float">
+                {initial !== '؟' ? initial : <UserIcon className="w-8 h-8" />}
+              </div>
+              <div className="text-center">
+                <p className="arabic text-base font-bold text-ink">{form.name || user?.username}</p>
+                <p className="arabic text-xs text-ink-subtle">{form.grade || (user?.role === 'admin' ? 'مدير المدرسة' : 'معلم')}</p>
               </div>
             </div>
 
             {/* Name */}
             <div>
-              <label className="arabic block text-sm font-medium text-gray-700 mb-1.5">
+              <label className="arabic block text-xs font-semibold text-ink-muted mb-1.5">
                 الاسم الكامل
               </label>
               <input
@@ -58,14 +63,14 @@ export default function Profile() {
                 value={form.name}
                 onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                 placeholder="مثال: سلمى معيز"
-                className="arabic w-full border border-gray-200 rounded-xl px-4 py-2.5 text-right focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="arabic w-full border border-line bg-canvas/40 focus:bg-surface rounded-xl px-4 py-2.5 text-sm text-right focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand transition"
                 dir="rtl"
               />
             </div>
 
             {/* Grade / رتبة */}
             <div>
-              <label className="arabic block text-sm font-medium text-gray-700 mb-1.5">
+              <label className="arabic block text-xs font-semibold text-ink-muted mb-1.5">
                 الرتبة
               </label>
               <div className="space-y-2">
@@ -73,8 +78,8 @@ export default function Profile() {
                   <label key={g}
                          className={`arabic flex items-center gap-3 px-4 py-2.5 rounded-xl border cursor-pointer transition ${
                            form.grade === g
-                             ? 'border-blue-400 bg-blue-50 text-blue-700'
-                             : 'border-gray-200 hover:bg-gray-50'
+                             ? 'border-brand bg-brand-light/60 text-brand font-semibold'
+                             : 'border-line hover:bg-canvas text-ink'
                          }`}>
                     <input
                       type="radio"
@@ -82,7 +87,7 @@ export default function Profile() {
                       value={g}
                       checked={form.grade === g}
                       onChange={() => setForm(f => ({ ...f, grade: g }))}
-                      className="accent-blue-600"
+                      className="accent-brand"
                     />
                     <span className="text-sm">{g}</span>
                   </label>
@@ -90,18 +95,18 @@ export default function Profile() {
                 {/* Custom grade */}
                 <div className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border transition ${
                   form.grade && !GRADES.includes(form.grade)
-                    ? 'border-blue-400 bg-blue-50' : 'border-gray-200'
+                    ? 'border-brand bg-brand-light/60' : 'border-line'
                 }`}>
                   <input
                     type="radio"
                     name="grade"
                     checked={!GRADES.includes(form.grade) && form.grade !== ''}
                     onChange={() => {}}
-                    className="accent-blue-600 flex-shrink-0"
+                    className="accent-brand flex-shrink-0"
                   />
                   <input
                     type="text"
-                    placeholder="Autre…"
+                    placeholder="رتبة أخرى…"
                     value={!GRADES.includes(form.grade) ? form.grade : ''}
                     onFocus={() => { if (GRADES.includes(form.grade)) setForm(f => ({ ...f, grade: '' })) }}
                     onChange={e => setForm(f => ({ ...f, grade: e.target.value }))}
@@ -116,9 +121,10 @@ export default function Profile() {
             <button
               onClick={handleSave}
               disabled={saving || !form.name.trim()}
-              className="arabic w-full py-3 bg-brand hover:bg-brand-hover disabled:bg-gray-300 text-white rounded-xl font-semibold shadow-sm transition"
+              className="arabic w-full py-3 bg-brand hover:bg-brand-hover disabled:bg-gray-300 text-white rounded-xl text-sm font-semibold shadow-sm transition inline-flex items-center justify-center gap-2"
             >
-              {saving ? 'جاري الحفظ…' : saved ? 'تم الحفظ ✓' : 'حفظ التغييرات'}
+              {saved && <CheckIcon className="w-4 h-4" />}
+              <span>{saving ? 'جاري الحفظ…' : saved ? 'تم الحفظ بنجاح' : 'حفظ التغييرات'}</span>
             </button>
           </div>
         )}

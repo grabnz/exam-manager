@@ -5,6 +5,11 @@ import { api, ApiError, SessionInfo, ScoreRow, ScoreSaveItem, TemplateDef, Stude
 import { groups as templateGroups, finalFromGroupTotals } from '../lib/grid'
 import { palette, UIPalette } from '../lib/palette'
 import { enqueue, getQueued, removeQueued, flushOne, QueuedSave } from '../lib/offlineQueue'
+import {
+  LockIcon, UnlockIcon, WifiOffIcon, AlertIcon, FileSpreadsheetIcon,
+  PrinterIcon, CheckIcon, XIcon, SearchIcon, FilterIcon,
+  ArrowRightIcon, ChevronLeftIcon, ChevronRightIcon,
+} from '../components/icons'
 
 // ── UI structure built from the session's pinned grid template ────────────────
 interface FieldDef {
@@ -262,8 +267,8 @@ export default function ScoreEntry() {
       setConflict(false)
       setBaseUpdatedAt(res.saved_at)
       setIsDirty(false)
-      setSaveMsg('تم الحفظ ✓')
-      setTimeout(() => setSaveMsg(m => (m === 'تم الحفظ ✓' ? '' : m)), 2500)
+      setSaveMsg('تم الحفظ')
+      setTimeout(() => setSaveMsg(m => (m === 'تم الحفظ' ? '' : m)), 2500)
     } catch (err: any) {
       if (err instanceof ApiError && err.status === 409) {
         await enqueue(id!, scores, baseUpdatedAt)
@@ -275,7 +280,7 @@ export default function ScoreEntry() {
         await enqueue(id!, scores, baseUpdatedAt)
         setQueuedSave(await getQueued(id!) ?? null)
         setIsDirty(false)
-        setSaveMsg('محفوظ محليًا 📡')
+        setSaveMsg('محفوظ محليًا')
       }
     } finally {
       setSaving(false)
@@ -370,13 +375,27 @@ export default function ScoreEntry() {
 
   const pct = rows.length ? Math.round((gradedCount / rows.length) * 100) : 0
 
+  const tabLiveAvg = useMemo(() => {
+    if (!tab || !rows.length) return null
+    const vals: number[] = []
+    for (const r of rows) {
+      const st = statusMap[r.student_id]
+      if (st === 'absent' || st === 'exempt') continue
+      if (hasTabVal(r.student_id, tab, scoreMap)) {
+        vals.push(tabTot(r.student_id, tab, scoreMap))
+      }
+    }
+    if (!vals.length) return null
+    return +(vals.reduce((a, b) => a + b, 0) / vals.length).toFixed(2)
+  }, [tab, rows, scoreMap, statusMap])
+
   return (
     <div className="min-h-screen bg-canvas flex flex-col">
       {/* ── Studio Header ── */}
-      <header className="bg-surface border-b border-line px-4 md:px-6 py-3 flex-shrink-0 shadow-card">
+      <header className="bg-surface/95 backdrop-blur border-b border-line px-4 md:px-6 py-3 flex-shrink-0 shadow-card">
         <button onClick={() => navigate(session ? `/classes/${session.class_id}` : '/')}
-                className="arabic text-xs text-ink-muted hover:text-brand flex items-center gap-1 mb-1 font-medium">
-          → {session?.class_name ?? 'رجوع'}
+                className="arabic text-xs text-ink-muted hover:text-brand inline-flex items-center gap-1 mb-1 font-medium transition">
+          <ArrowRightIcon className="w-3.5 h-3.5" /> {session?.class_name ?? 'رجوع'}
         </button>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -390,13 +409,17 @@ export default function ScoreEntry() {
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {saving && <span className="hidden sm:block arabic text-xs text-brand font-medium">جاري الحفظ…</span>}
-            {!saving && saveMsg && <span className="hidden sm:block arabic text-xs text-emerald-600 font-medium">{saveMsg}</span>}
+            {!saving && saveMsg && (
+              <span className="hidden sm:inline-flex items-center gap-1 arabic text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full font-medium">
+                <CheckIcon className="w-3.5 h-3.5" /> {saveMsg}
+              </span>
+            )}
             {saveErr && <span className="arabic text-xs text-rose-600">{saveErr}</span>}
             {xlsxError && <span className="text-xs text-rose-600">{xlsxError}</span>}
 
             {locked && (
-              <span className="arabic hidden sm:flex items-center gap-1 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl font-medium">
-                🔒 نهائي
+              <span className="arabic hidden sm:inline-flex items-center gap-1 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl font-medium">
+                <LockIcon className="w-3.5 h-3.5" /> نهائي
               </span>
             )}
 
@@ -409,18 +432,20 @@ export default function ScoreEntry() {
                 setXlsxLoading(false)
                 if (err) setXlsxError('فشل التصدير')
               }}
-              className="text-xs bg-surface border border-line hover:border-brand/40 text-ink disabled:opacity-50 px-2.5 py-1.5 rounded-xl font-medium transition">
-              {xlsxLoading ? '…' : '↓ Excel'}
+              className="inline-flex items-center gap-1.5 text-xs bg-surface border border-line hover:border-brand/40 text-ink disabled:opacity-50 px-2.5 py-1.5 rounded-xl font-medium transition">
+              <FileSpreadsheetIcon className="w-3.5 h-3.5 text-emerald-600" />
+              <span>{xlsxLoading ? '…' : 'Excel'}</span>
             </button>
             <button onClick={() => window.open(`/sessions/${id}/print`, '_blank')}
-                    className="text-xs bg-surface border border-rose-200 hover:border-rose-400 text-rose-700 px-2.5 py-1.5 rounded-xl font-medium transition">
-              ↓ PDF
+                    className="inline-flex items-center gap-1.5 text-xs bg-surface border border-rose-200 hover:border-rose-400 text-rose-700 px-2.5 py-1.5 rounded-xl font-medium transition">
+              <PrinterIcon className="w-3.5 h-3.5" />
+              <span>PDF</span>
             </button>
 
             {!locked && (
               <button onClick={() => save()} disabled={saving || !isDirty}
-                      className="arabic text-xs bg-brand hover:bg-brand-hover disabled:bg-gray-300 text-white px-3.5 py-1.5 rounded-xl font-semibold shadow-sm transition">
-                {saving ? '…' : isDirty ? 'حفظ' : '✓'}
+                      className="arabic inline-flex items-center gap-1 text-xs bg-brand hover:bg-brand-hover disabled:bg-gray-300 text-white px-3.5 py-1.5 rounded-xl font-semibold shadow-sm transition">
+                {saving ? '…' : isDirty ? 'حفظ' : <CheckIcon className="w-3.5 h-3.5" />}
               </button>
             )}
 
@@ -428,13 +453,14 @@ export default function ScoreEntry() {
               <button
                 onClick={toggleFinalize}
                 disabled={finalizing}
-                className={`arabic text-xs px-3 py-1.5 rounded-xl font-semibold transition ${
+                className={`arabic inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl font-semibold transition ${
                   locked
                     ? 'border border-amber-300 text-amber-800 hover:bg-amber-50'
                     : 'bg-emerald-600 hover:bg-emerald-700 text-white disabled:bg-gray-300'
                 }`}
               >
-                {finalizing ? '…' : locked ? '🔓 إلغاء القفل' : '🔒 إنهاء'}
+                {locked ? <UnlockIcon className="w-3.5 h-3.5" /> : <LockIcon className="w-3.5 h-3.5" />}
+                <span>{finalizing ? '…' : locked ? 'إلغاء القفل' : 'إنهاء'}</span>
               </button>
             )}
           </div>
@@ -442,17 +468,17 @@ export default function ScoreEntry() {
       </header>
 
       {/* ── Tabs ── */}
-      <div className="flex gap-1 px-4 md:px-6 pt-3 overflow-x-auto flex-shrink-0 scrollbar-hide">
+      <div className="flex gap-1.5 px-4 md:px-6 pt-3 overflow-x-auto flex-shrink-0 scrollbar-hide">
         {tabs.map(t => (
           <button key={t.key} onClick={() => { setActiveTab(t.key); setMobileIdx(null) }}
-                  className={`px-3 md:px-4 py-2 rounded-t-lg text-xs md:text-sm font-medium whitespace-nowrap transition ${
+                  className={`px-3.5 md:px-4 py-2 rounded-t-xl text-xs md:text-sm font-semibold whitespace-nowrap transition ${
                     activeTab === t.key ? t.pal.tabActive : t.pal.tabInactive}`}>
             {t.label}
           </button>
         ))}
         {tabs.length > 0 && (
           <button onClick={() => { setActiveTab('finale'); setMobileIdx(null) }}
-                  className={`px-3 md:px-4 py-2 rounded-t-lg text-xs md:text-sm font-medium whitespace-nowrap transition ${
+                  className={`px-3.5 md:px-4 py-2 rounded-t-xl text-xs md:text-sm font-semibold whitespace-nowrap transition ${
                     activeTab === 'finale'
                       ? 'bg-finale-dark text-white'
                       : 'bg-finale-light text-finale-dark hover:bg-finale-mid'}`}>
@@ -463,14 +489,14 @@ export default function ScoreEntry() {
 
       {/* ── Offline queue banner ── */}
       {queuedSave && queuedSave.status === 'pending' && !conflict && (
-        <div className="arabic flex items-center gap-2 px-4 md:px-6 py-2 bg-amber-50 border-b border-amber-200 text-sm text-amber-800 flex-shrink-0" dir="rtl">
-          <span>📡</span>
+        <div className="arabic flex items-center gap-2 px-4 md:px-6 py-2 bg-accent-soft border-b border-accent-light text-sm text-amber-900 flex-shrink-0" dir="rtl">
+          <WifiOffIcon className="w-4 h-4 text-accent flex-shrink-0" />
           <span className="font-medium">محفوظ محليًا — سيُرسل تلقائياً عند عودة الاتصال.</span>
         </div>
       )}
       {queuedSave && queuedSave.status === 'error' && (
-        <div className="arabic flex items-center gap-2 px-4 md:px-6 py-2 bg-red-50 border-b border-red-200 text-sm text-red-700 flex-shrink-0" dir="rtl">
-          <span>⚠</span>
+        <div className="arabic flex items-center gap-2 px-4 md:px-6 py-2 bg-rose-50 border-b border-rose-200 text-sm text-rose-700 flex-shrink-0" dir="rtl">
+          <AlertIcon className="w-4 h-4 text-rose-600 flex-shrink-0" />
           <span className="font-medium">تعذّرت مزامنة الحفظ المحلي: {queuedSave.message}</span>
           <button onClick={() => { void removeQueued(id!).then(() => { setQueuedSave(null); qc.invalidateQueries({ queryKey: ['scores', id] }) }) }}
                   className="mr-auto text-xs underline">تجاهل</button>
@@ -479,19 +505,24 @@ export default function ScoreEntry() {
 
       {/* ── Conflict dialog ── */}
       {conflict && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
-          <div className="w-full max-w-sm bg-white rounded-2xl p-6 space-y-4 shadow-xl" dir="rtl">
-            <h3 className="arabic text-lg font-bold text-gray-900">⚠ تعارض في الأعداد</h3>
-            <p className="arabic text-sm text-gray-600">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 backdrop-blur-[2px] px-4 animate-fade-in">
+          <div className="w-full max-w-sm bg-surface border border-line rounded-3xl p-6 space-y-4 shadow-float animate-scale-in" dir="rtl">
+            <div className="flex items-center gap-2.5">
+              <span className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+                <AlertIcon className="w-5 h-5" />
+              </span>
+              <h3 className="arabic text-lg font-bold text-ink">تعارض في الأعداد</h3>
+            </div>
+            <p className="arabic text-sm text-ink-muted">
               تم تعديل أعداد هذه الجلسة من جهاز آخر بعد آخر مزامنة. ماذا تريدون أن تفعلوا؟
             </p>
             <div className="space-y-2">
               <button onClick={() => void resolveConflict(true)}
-                      className="arabic w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium">
+                      className="arabic w-full py-2.5 bg-brand hover:bg-brand-hover text-white rounded-xl text-sm font-semibold shadow-sm transition">
                 استبدال بنسختي (هذا الجهاز)
               </button>
               <button onClick={() => void resolveConflict(false)}
-                      className="arabic w-full py-2.5 border border-gray-200 text-gray-700 hover:bg-gray-50 rounded-xl text-sm font-medium">
+                      className="arabic w-full py-2.5 border border-line text-ink-muted hover:bg-canvas rounded-xl text-sm font-medium transition">
                 تحميل نسخة الخادم وإلغاء تعديلاتي
               </button>
             </div>
@@ -501,36 +532,37 @@ export default function ScoreEntry() {
 
       {/* ── Lock banner ── */}
       {locked && (
-        <div className="arabic flex items-center gap-2 px-4 md:px-6 py-2 bg-green-50 border-b border-green-200 text-sm text-green-800 flex-shrink-0" dir="rtl">
-          <span>🔒</span>
+        <div className="arabic flex items-center gap-2 px-4 md:px-6 py-2 bg-emerald-50 border-b border-emerald-200 text-sm text-emerald-800 flex-shrink-0" dir="rtl">
+          <LockIcon className="w-4 h-4 text-emerald-600 flex-shrink-0" />
           <span className="font-medium">الجلسة نهائية — الأعداد للقراءة فقط.</span>
           {isAdmin ? (
             <button onClick={toggleFinalize} disabled={finalizing}
-                    className="mr-auto text-xs text-amber-600 hover:underline">
+                    className="mr-auto text-xs text-amber-700 font-semibold hover:underline">
               إلغاء القفل
             </button>
           ) : (
-            <span className="mr-auto text-xs text-green-600">لإلغاء القفل اتصلوا بالمدير</span>
+            <span className="mr-auto text-xs text-emerald-600">لإلغاء القفل اتصلوا بالمدير</span>
           )}
         </div>
       )}
 
       {/* ── Search, Progress & Incomplete Filter (#12) ── */}
       {activeTab !== 'finale' && rows.length > 0 && (
-        <div className="px-4 md:px-6 py-2 flex flex-wrap items-center gap-3 flex-shrink-0" dir="rtl">
+        <div className="px-4 md:px-6 py-2.5 flex flex-wrap items-center gap-3 flex-shrink-0" dir="rtl">
           <div className="relative flex-1 min-w-[200px] max-w-xs">
+            <SearchIcon className="w-4 h-4 text-ink-subtle absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               placeholder="البحث عن تلميذ…"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full px-3 py-1.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white arabic"
+              className="w-full pr-9 pl-8 py-1.5 border border-line rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand bg-surface arabic transition"
               dir="rtl"
             />
             {search && (
               <button onClick={() => setSearch('')}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs">
-                ✕
+                      className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-subtle hover:text-ink">
+                <XIcon className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
@@ -538,26 +570,32 @@ export default function ScoreEntry() {
           <button
             type="button"
             onClick={() => setOnlyIncomplete(v => !v)}
-            className={`arabic text-xs px-3 py-1.5 rounded-xl border font-medium transition ${
+            className={`arabic inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-xl border font-medium transition ${
               onlyIncomplete
-                ? 'bg-amber-50 border-amber-300 text-amber-800'
-                : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
+                ? 'bg-accent-soft border-accent-light text-amber-900'
+                : 'bg-surface border-line text-ink-muted hover:border-brand/40'
             }`}
           >
-            {onlyIncomplete ? '✓ غير مكتمل فقط' : 'غير مكتمل فقط'}
+            <FilterIcon className="w-3.5 h-3.5" />
+            <span>غير مكتمل فقط</span>
           </button>
 
-          <div className="flex items-center gap-2 mr-auto">
-            <span className="arabic text-xs text-gray-500 font-medium">
+          <div className="flex items-center gap-3 mr-auto">
+            {tabLiveAvg != null && (
+              <span className="hidden sm:inline-flex items-center gap-1.5 arabic text-xs bg-brand-light text-brand px-2.5 py-1 rounded-full font-semibold num">
+                معدل القسم: <strong dir="ltr">{tabLiveAvg}</strong>
+              </span>
+            )}
+            <span className="arabic text-xs text-ink-muted font-medium num">
               {gradedCount} / {rows.length} تلميذ
             </span>
-            <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+            <div className="w-24 h-2 bg-line rounded-full overflow-hidden">
               <div
-                className={`h-full rounded-full transition-all ${pct === 100 ? 'bg-green-500' : 'bg-blue-500'}`}
+                className={`h-full rounded-full transition-all ${pct === 100 ? 'bg-emerald-500' : 'bg-brand'}`}
                 style={{ width: `${pct}%` }}
               />
             </div>
-            <span className="text-xs font-bold text-gray-600" dir="ltr">{pct}%</span>
+            <span className="text-xs font-bold text-ink num" dir="ltr">{pct}%</span>
           </div>
         </div>
       )}
@@ -666,15 +704,15 @@ function MobileEditor({ rows, idx, tab, scoreMap, statusMap, locked, onUpdate, o
       }}
     >
       {/* Header with jump dropdown */}
-      <div className="bg-white border-b border-gray-200 px-4 py-2.5 flex items-center justify-between gap-2 flex-shrink-0">
-        <button onClick={onClose} className="arabic text-blue-600 font-medium text-sm flex-shrink-0">
-          ← القائمة
+      <div className="bg-surface border-b border-line px-4 py-2.5 flex items-center justify-between gap-2 flex-shrink-0">
+        <button onClick={onClose} className="arabic text-brand font-semibold text-sm inline-flex items-center gap-1 flex-shrink-0">
+          <ArrowRightIcon className="w-4 h-4" /> القائمة
         </button>
         <div className="flex-1 min-w-0 text-center">
           <select
             value={idx}
             onChange={e => onNavigate(Number(e.target.value))}
-            className="arabic max-w-full bg-gray-50 border border-gray-200 rounded-lg px-2 py-1 font-bold text-gray-900 text-sm text-center"
+            className="arabic max-w-full bg-canvas border border-line rounded-xl px-2.5 py-1 font-bold text-ink text-sm text-center"
             dir="rtl"
           >
             {rows.map((r, ri) => (
@@ -683,22 +721,22 @@ function MobileEditor({ rows, idx, tab, scoreMap, statusMap, locked, onUpdate, o
           </select>
         </div>
         <button onClick={onSave} disabled={saving || !isDirty}
-                className="arabic text-xs bg-blue-600 disabled:bg-gray-300 text-white px-3 py-1.5 rounded-lg font-medium flex-shrink-0">
-          {saving ? '…' : saveMsg ? '✓' : 'حفظ'}
+                className="arabic text-xs bg-brand disabled:bg-gray-300 text-white px-3 py-1.5 rounded-xl font-semibold flex-shrink-0 inline-flex items-center gap-1">
+          {saving ? '…' : saveMsg ? <CheckIcon className="w-3.5 h-3.5" /> : 'حفظ'}
         </button>
       </div>
 
       {/* Status bar */}
-      <div className="bg-white border-b border-gray-100 px-4 py-2 flex items-center justify-center gap-2 flex-shrink-0" dir="rtl">
+      <div className="bg-surface border-b border-line px-4 py-2 flex items-center justify-center gap-2 flex-shrink-0" dir="rtl">
         {([
-          { key: 'present', label: 'حاضر', active: 'bg-blue-600 text-white border-blue-600' },
+          { key: 'present', label: 'حاضر', active: 'bg-brand text-white border-brand' },
           { key: 'absent',  label: 'غائب (غ)', active: 'bg-rose-600 text-white border-rose-600' },
-          { key: 'exempt',  label: 'معفى', active: 'bg-gray-700 text-white border-gray-700' },
+          { key: 'exempt',  label: 'معفى', active: 'bg-ink text-white border-ink' },
         ] as const).map(opt => (
           <button key={opt.key} type="button" disabled={locked}
                   onClick={() => onStatusChange(row.student_id, opt.key)}
-                  className={`arabic text-xs px-3 py-1 rounded-full border transition ${
-                    st === opt.key ? opt.active : 'bg-white text-gray-600 border-gray-200'
+                  className={`arabic text-xs px-3 py-1 rounded-full border font-medium transition ${
+                    st === opt.key ? opt.active : 'bg-surface text-ink-muted border-line'
                   }`}>
             {opt.label}
           </button>
@@ -707,15 +745,15 @@ function MobileEditor({ rows, idx, tab, scoreMap, statusMap, locked, onUpdate, o
 
       {/* Quick-fill chips for currently focused criterion (#11) */}
       {!locked && !isOut && focusedField && (
-        <div className="bg-blue-50/80 border-b border-blue-100 px-3 py-2 flex items-center gap-1.5 overflow-x-auto flex-shrink-0">
-          <span className="arabic text-[11px] text-blue-700 font-medium flex-shrink-0">إدخال سريع:</span>
+        <div className="bg-brand-light/70 border-b border-brand-mid px-3 py-2 flex items-center gap-1.5 overflow-x-auto flex-shrink-0">
+          <span className="arabic text-[11px] text-brand font-semibold flex-shrink-0">إدخال سريع:</span>
           {quickChipsFor(focusedField.maxScore).map(val => (
             <button
               key={val}
               type="button"
               onMouseDown={e => e.preventDefault()}
               onClick={() => onUpdate(row.student_id, focusedField.key, String(val))}
-              className="px-2.5 py-1 bg-white border border-blue-200 hover:bg-blue-600 hover:text-white rounded-lg text-xs font-bold text-blue-800 transition flex-shrink-0"
+              className="px-2.5 py-1 bg-surface border border-brand-mid hover:bg-brand hover:text-white rounded-lg text-xs font-bold text-brand transition flex-shrink-0 num"
             >
               {val}
             </button>
@@ -812,14 +850,14 @@ function MobileEditor({ rows, idx, tab, scoreMap, statusMap, locked, onUpdate, o
       </div>
 
       {/* Prev / Next */}
-      <div className="bg-white border-t border-gray-200 p-3 grid grid-cols-2 gap-3 flex-shrink-0 safe-bottom">
+      <div className="bg-surface border-t border-line p-3 grid grid-cols-2 gap-3 flex-shrink-0 safe-bottom">
         <button onClick={() => onNavigate(idx - 1)} disabled={idx === 0}
-                className="arabic py-3.5 border border-gray-200 rounded-xl text-gray-700 font-medium text-sm disabled:opacity-30 active:bg-gray-50">
-          → السابق
+                className="arabic py-3.5 border border-line rounded-xl text-ink font-semibold text-sm disabled:opacity-30 active:bg-canvas inline-flex items-center justify-center gap-1.5">
+          <ChevronRightIcon className="w-4 h-4" /> السابق
         </button>
         <button onClick={() => onNavigate(idx + 1)} disabled={idx === rows.length - 1}
-                className="arabic py-3.5 border border-gray-200 rounded-xl text-gray-700 font-medium text-sm disabled:opacity-30 active:bg-gray-50">
-          التالي ←
+                className="arabic py-3.5 border border-line rounded-xl text-ink font-semibold text-sm disabled:opacity-30 active:bg-canvas inline-flex items-center justify-center gap-1.5">
+          التالي <ChevronLeftIcon className="w-4 h-4" />
         </button>
       </div>
     </div>

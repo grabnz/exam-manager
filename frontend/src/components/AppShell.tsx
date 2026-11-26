@@ -1,10 +1,12 @@
+import { useEffect, useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api, SettingsData } from '../api/client'
 import { useAuth } from '../auth'
+import CommandPalette from './CommandPalette'
 import {
   SchoolIcon, ClockIcon, CalendarIcon, FolderIcon, ShieldIcon,
-  UserIcon, KeyIcon, LogOutIcon, BookOpenIcon,
+  UserIcon, KeyIcon, LogOutIcon, BookOpenIcon, SearchIcon,
 } from './icons'
 
 export default function AppShell({
@@ -21,6 +23,18 @@ export default function AppShell({
   const navigate = useNavigate()
   const { user, logout } = useAuth()
   const isAdmin = user?.role === 'admin'
+  const [cmdOpen, setCmdOpen] = useState(false)
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setCmdOpen(v => !v)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
 
   const { data: settings } = useQuery<SettingsData>({
     queryKey: ['settings'],
@@ -41,12 +55,14 @@ export default function AppShell({
 
   return (
     <div className="min-h-screen bg-canvas text-ink flex" dir="rtl">
+      <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} />
+
       {/* ── Desktop RTL Sidebar ── */}
       <aside className="hidden md:flex md:flex-col w-64 bg-surface border-l border-line sticky top-0 h-screen flex-shrink-0 print:hidden">
         {/* Brand mark */}
-        <div className="px-5 py-5 border-b border-line">
+        <div className="px-5 pt-5 pb-4 border-b border-line">
           <button onClick={() => navigate('/')} className="flex items-center gap-3 text-right w-full group">
-            <span className="w-10 h-10 rounded-xl bg-brand text-white flex items-center justify-center shadow-sm flex-shrink-0 group-hover:bg-brand-hover transition">
+            <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand to-brand-hover text-white flex items-center justify-center shadow-sm flex-shrink-0 group-hover:scale-[1.03] transition">
               <BookOpenIcon className="w-5 h-5" />
             </span>
             <span className="min-w-0">
@@ -62,6 +78,19 @@ export default function AppShell({
               السنة الدراسية {settings.active_year}
             </div>
           )}
+
+          {/* Quick-jump search trigger */}
+          <button
+            type="button"
+            onClick={() => setCmdOpen(true)}
+            className="mt-3 w-full flex items-center gap-2 px-3 py-2 rounded-xl bg-canvas hover:bg-brand-light/50 border border-line text-xs text-ink-subtle hover:text-ink transition"
+          >
+            <SearchIcon className="w-3.5 h-3.5 flex-shrink-0" />
+            <span className="arabic flex-1 text-right">بحث سريع…</span>
+            <kbd className="font-mono text-[10px] bg-surface border border-line px-1.5 py-0.5 rounded text-ink-subtle" dir="ltr">
+              Ctrl K
+            </kbd>
+          </button>
         </div>
 
         {/* Navigation */}
@@ -122,7 +151,17 @@ export default function AppShell({
                 {title && <h1 className="arabic text-lg md:text-xl font-bold text-ink truncate">{title}</h1>}
                 {subtitle && <p className="arabic text-xs text-ink-muted mt-0.5 truncate">{subtitle}</p>}
               </div>
-              {actions && <div className="flex items-center gap-2 flex-shrink-0">{actions}</div>}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setCmdOpen(true)}
+                  className="md:hidden w-9 h-9 rounded-xl bg-canvas border border-line text-ink-muted flex items-center justify-center hover:text-brand transition"
+                  aria-label="بحث سريع"
+                >
+                  <SearchIcon className="w-4 h-4" />
+                </button>
+                {actions}
+              </div>
             </div>
           </header>
         )}

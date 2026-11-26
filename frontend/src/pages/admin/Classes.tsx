@@ -3,6 +3,11 @@ import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, PDFPreviewResult, Subject, UserRow, YearGroup } from '../../api/client'
 import { useUI } from '../../components/ui'
+import { EmptyState, ListSkeleton } from '../../components/Skeleton'
+import {
+  PlusIcon, UploadIcon, CopyIcon, EditIcon, TrashIcon,
+  SchoolIcon, ChevronLeftIcon, FileIcon,
+} from '../../components/icons'
 
 const LEVELS = [
   'السنة الأولى', 'السنة الثانية', 'السنة الثالثة',
@@ -70,19 +75,20 @@ export default function Classes() {
   return (
     <div className="space-y-6">
       {error && (
-        <div className="arabic bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm text-right" dir="rtl">
+        <div className="arabic bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-2xl text-sm text-right" dir="rtl">
           {error}
         </div>
       )}
 
       <div className="grid grid-cols-2 gap-3">
         <button onClick={() => setCreateOpen(v => !v)}
-                className="arabic py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition">
-          + قسم جديد
+                className="arabic py-3 bg-brand hover:bg-brand-hover text-white rounded-2xl text-sm font-semibold shadow-sm transition inline-flex items-center justify-center gap-2">
+          <PlusIcon className="w-4 h-4" /> قسم جديد
         </button>
         <button onClick={() => fileRef.current?.click()} disabled={uploading}
-                className="arabic py-3 bg-white border border-blue-300 text-blue-700 hover:bg-blue-50 disabled:opacity-50 rounded-xl font-medium transition">
-          {uploading ? 'جاري الاستيراد…' : '⬆ استيراد PDF'}
+                className="arabic py-3 bg-surface border border-line hover:border-brand/50 text-brand hover:bg-brand-light/40 disabled:opacity-50 rounded-2xl text-sm font-semibold shadow-card transition inline-flex items-center justify-center gap-2">
+          <UploadIcon className="w-4 h-4" />
+          <span>{uploading ? 'جاري الاستيراد…' : 'استيراد PDF'}</span>
         </button>
       </div>
       <input ref={fileRef} type="file" accept=".pdf" className="hidden" onChange={handleFile} />
@@ -101,45 +107,56 @@ export default function Classes() {
       )}
 
       {isLoading ? (
-        <div className="text-center py-10 text-gray-400">…</div>
+        <ListSkeleton rows={5} />
       ) : years.length === 0 ? (
-        <p className="arabic text-center text-gray-400 py-10" dir="rtl">لا توجد أقسام بعد.</p>
+        <EmptyState
+          Icon={SchoolIcon}
+          title="لا توجد أقسام بعد"
+          description="أنشئوا أول قسم يدوياً أو استوردوا قائمة التلاميذ مباشرة من ملف PDF."
+        />
       ) : (
         years.map(year => (
           <section key={year.label}>
-            <h2 className="arabic text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3 text-right" dir="rtl">
+            <h2 className="arabic text-xs font-bold text-ink-muted tracking-wide mb-3 text-right num" dir="rtl">
               السنة الدراسية {year.label}
             </h2>
-            <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
+            <div className="bg-surface border border-line rounded-3xl divide-y divide-line shadow-card overflow-hidden">
               {year.classes.map(c => (
-                <div key={c.id} className="flex items-center justify-between gap-3 px-4 py-3" dir="rtl">
-                  <button onClick={() => navigate(`/classes/${c.id}`)} className="text-right min-w-0 flex-1 group">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="arabic text-sm font-medium text-gray-800 group-hover:text-blue-700">{c.name}</span>
-                      {c.level && <span className="arabic text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">{c.level}</span>}
-                    </div>
-                    <span className="arabic text-xs text-gray-400">
-                      {c.student_count} تلميذ · {c.subjects.length > 0
-                        ? c.subjects.map(s => s.name).join('، ')
-                        : 'لا مواد مسندة'}
+                <div key={c.id} className="flex items-center justify-between gap-3 px-4 py-3.5 hover:bg-canvas/50 transition" dir="rtl">
+                  <button onClick={() => navigate(`/classes/${c.id}`)} className="flex items-center gap-3 text-right min-w-0 flex-1 group">
+                    <span className="w-10 h-10 rounded-xl bg-brand-light text-brand flex items-center justify-center flex-shrink-0 group-hover:bg-brand group-hover:text-white transition">
+                      <SchoolIcon className="w-4 h-4" />
                     </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="arabic text-sm font-bold text-ink group-hover:text-brand transition">{c.name}</span>
+                        {c.level && <span className="arabic text-[11px] bg-canvas text-ink-muted px-2 py-0.5 rounded-full">{c.level}</span>}
+                      </div>
+                      <span className="arabic text-xs text-ink-subtle block truncate num">
+                        {c.student_count} تلميذ · {c.subjects.length > 0
+                          ? c.subjects.map(s => s.name).join('، ')
+                          : 'لا مواد مسندة'}
+                      </span>
+                    </div>
                   </button>
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     <button
                       title="نسخ إلى سنة جديدة"
                       onClick={() => setCloneTarget({ id: c.id, name: c.name, level: c.level, year: year.label })}
-                      className="arabic text-xs text-gray-500 hover:text-emerald-600 border border-gray-200 px-2 py-1 rounded-lg">
-                      نسخ
+                      className="arabic inline-flex items-center gap-1 text-xs text-ink-muted hover:text-emerald-700 border border-line hover:border-emerald-300 px-2.5 py-1.5 rounded-xl transition">
+                      <CopyIcon className="w-3.5 h-3.5" /> نسخ
                     </button>
                     <button
+                      title="تعديل اسم القسم"
                       onClick={async () => {
                         const name = await ui.prompt({ title: 'تعديل اسم القسم', defaultValue: c.name })
                         if (name && name !== c.name) run(() => api.classes.rename(c.id, name))
                       }}
-                      className="text-xs text-gray-400 hover:text-blue-500 border border-gray-200 px-2 py-1 rounded-lg">
-                      ✎
+                      className="p-2 text-ink-muted hover:text-brand border border-line hover:border-brand/40 rounded-xl transition">
+                      <EditIcon className="w-3.5 h-3.5" />
                     </button>
                     <button
+                      title="حذف القسم"
                       onClick={async () => {
                         const ok = await ui.confirm({
                           title: 'حذف القسم',
@@ -149,8 +166,8 @@ export default function Classes() {
                         })
                         if (ok) run(() => api.classes.delete(c.id))
                       }}
-                      className="text-xs text-gray-400 hover:text-red-500 border border-gray-200 px-2 py-1 rounded-lg">
-                      ✕
+                      className="p-2 text-ink-subtle hover:text-rose-600 border border-line hover:border-rose-300 rounded-xl transition">
+                      <TrashIcon className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
@@ -220,45 +237,50 @@ function PDFPreviewModal({ preview, onClose, onCreated }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 backdrop-blur-[2px] px-4 animate-fade-in" onClick={onClose}>
       <form onSubmit={submit} onClick={e => e.stopPropagation()}
-            className="w-full max-w-lg bg-white rounded-2xl p-5 space-y-4 shadow-xl max-h-[90vh] overflow-y-auto" dir="rtl">
-        <h3 className="arabic text-base font-bold text-gray-900">معاينة وتصحيح بيانات PDF</h3>
-        {err && <p className="arabic text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{err}</p>}
+            className="w-full max-w-lg bg-surface border border-line rounded-3xl p-6 space-y-4 shadow-float max-h-[90vh] overflow-y-auto animate-scale-in" dir="rtl">
+        <div className="flex items-center gap-2.5">
+          <span className="w-9 h-9 rounded-xl bg-brand-light text-brand flex items-center justify-center">
+            <FileIcon className="w-4 h-4" />
+          </span>
+          <h3 className="arabic text-base font-bold text-ink">معاينة وتصحيح بيانات PDF</h3>
+        </div>
+        {err && <p className="arabic text-xs text-rose-600 bg-rose-50 px-3 py-2 rounded-xl">{err}</p>}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label className="arabic block text-xs text-gray-600 mb-1">اسم القسم</label>
+            <label className="arabic block text-xs font-semibold text-ink-muted mb-1">اسم القسم</label>
             <input value={name} onChange={e => setName(e.target.value)} required
-                   className="arabic w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm" />
+                   className="arabic w-full border border-line bg-canvas/40 focus:bg-surface rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/40" />
           </div>
           <div>
-            <label className="arabic block text-xs text-gray-600 mb-1">المستوى</label>
+            <label className="arabic block text-xs font-semibold text-ink-muted mb-1">المستوى</label>
             <select value={level} onChange={e => setLevel(e.target.value)}
-                    className="arabic w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
+                    className="arabic w-full border border-line bg-canvas/40 focus:bg-surface rounded-xl px-3 py-2 text-sm">
               <option value="">—</option>
               {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
             </select>
           </div>
           <div>
-            <label className="arabic block text-xs text-gray-600 mb-1">السنة الدراسية</label>
+            <label className="arabic block text-xs font-semibold text-ink-muted mb-1">السنة الدراسية</label>
             <input value={year} onChange={e => setYear(e.target.value)} dir="ltr" required
-                   className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm" />
+                   className="w-full border border-line bg-canvas/40 focus:bg-surface rounded-xl px-3 py-2 text-sm num focus:outline-none focus:ring-2 focus:ring-brand/40" />
           </div>
         </div>
         <div>
-          <label className="arabic block text-xs text-gray-600 mb-1">
+          <label className="arabic block text-xs font-semibold text-ink-muted mb-1">
             قائمة التلاميذ المستخرجة ({students.length} تلميذ) — يمكن التعديل قبل الحفظ
           </label>
           <textarea rows={8} value={studentsText} onChange={e => setStudentsText(e.target.value)}
-                    className="arabic w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-right" />
+                    className="arabic w-full border border-line bg-canvas/40 focus:bg-surface rounded-xl px-3.5 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-brand/40" />
         </div>
         <div className="flex gap-2">
           <button type="submit" disabled={saving || !name.trim()}
-                  className="arabic flex-1 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-xl text-sm font-medium">
+                  className="arabic flex-1 py-2.5 bg-brand hover:bg-brand-hover disabled:bg-gray-300 text-white rounded-xl text-sm font-semibold shadow-sm transition">
             {saving ? 'جاري الإنشاء…' : 'تأكيد وإنشاء القسم'}
           </button>
           <button type="button" onClick={onClose}
-                  className="arabic px-4 py-2 border border-gray-200 rounded-xl text-sm text-gray-600">
+                  className="arabic px-5 py-2.5 border border-line rounded-xl text-sm text-ink-muted hover:bg-canvas transition">
             إلغاء
           </button>
         </div>
@@ -307,41 +329,46 @@ function CloneClassModal({ source, onClose, onCloned }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={onClose}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 backdrop-blur-[2px] px-4 animate-fade-in" onClick={onClose}>
       <form onSubmit={submit} onClick={e => e.stopPropagation()}
-            className="w-full max-w-sm bg-white rounded-2xl p-5 space-y-4 shadow-xl" dir="rtl">
-        <h3 className="arabic text-base font-bold text-gray-900">نسخ القسم إلى سنة جديدة</h3>
+            className="w-full max-w-sm bg-surface border border-line rounded-3xl p-6 space-y-4 shadow-float animate-scale-in" dir="rtl">
+        <div className="flex items-center gap-2.5">
+          <span className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center">
+            <CopyIcon className="w-4 h-4" />
+          </span>
+          <h3 className="arabic text-base font-bold text-ink">نسخ القسم إلى سنة جديدة</h3>
+        </div>
         <div className="space-y-3">
           <div>
-            <label className="arabic block text-xs text-gray-600 mb-1">اسم القسم الجديد</label>
+            <label className="arabic block text-xs font-semibold text-ink-muted mb-1">اسم القسم الجديد</label>
             <input value={name} onChange={e => setName(e.target.value)} required
-                   className="arabic w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm" />
+                   className="arabic w-full border border-line bg-canvas/40 focus:bg-surface rounded-xl px-3.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand/40" />
           </div>
           <div>
-            <label className="arabic block text-xs text-gray-600 mb-1">المستوى</label>
+            <label className="arabic block text-xs font-semibold text-ink-muted mb-1">المستوى</label>
             <select value={level} onChange={e => setLevel(e.target.value)}
-                    className="arabic w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm">
+                    className="arabic w-full border border-line bg-canvas/40 focus:bg-surface rounded-xl px-3.5 py-2 text-sm">
               <option value="">—</option>
               {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
             </select>
           </div>
           <div>
-            <label className="arabic block text-xs text-gray-600 mb-1">السنة الدراسية المستهدفة</label>
+            <label className="arabic block text-xs font-semibold text-ink-muted mb-1">السنة الدراسية المستهدفة</label>
             <input value={year} onChange={e => setYear(e.target.value)} dir="ltr" required
-                   className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-sm" />
+                   className="w-full border border-line bg-canvas/40 focus:bg-surface rounded-xl px-3.5 py-2 text-sm num focus:outline-none focus:ring-2 focus:ring-brand/40" />
           </div>
-          <label className="arabic flex items-center gap-2 text-xs text-gray-700">
-            <input type="checkbox" checked={copyStudents} onChange={e => setCopyStudents(e.target.checked)} />
+          <label className="arabic flex items-center gap-2 text-xs text-ink-muted">
+            <input type="checkbox" checked={copyStudents} onChange={e => setCopyStudents(e.target.checked)} className="accent-brand" />
             نسخ قائمة التلاميذ أيضاً
           </label>
         </div>
         <div className="flex gap-2">
           <button type="submit" disabled={saving || !name.trim() || !year.trim()}
-                  className="arabic flex-1 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white rounded-xl text-sm font-medium">
+                  className="arabic flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-300 text-white rounded-xl text-sm font-semibold shadow-sm transition">
             {saving ? 'جاري النسخ…' : 'نسخ القسم'}
           </button>
           <button type="button" onClick={onClose}
-                  className="arabic px-4 py-2 border border-gray-200 rounded-xl text-sm text-gray-600">
+                  className="arabic px-4 py-2.5 border border-line rounded-xl text-sm text-ink-muted hover:bg-canvas transition">
             إلغاء
           </button>
         </div>
@@ -400,9 +427,9 @@ function CreateClassWizard({ onDone, onError, onCancel }: {
   }
 
   return (
-    <div className="bg-white border border-blue-200 rounded-xl p-5 space-y-4" dir="rtl">
+    <div className="bg-surface border border-brand-mid rounded-3xl p-5 space-y-4 shadow-card" dir="rtl">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h3 className="arabic font-semibold text-gray-800">إنشاء قسم جديد</h3>
+        <h3 className="arabic font-bold text-ink">إنشاء قسم جديد</h3>
         <div className="flex items-center gap-1.5 text-xs">
           {[
             { n: 1 as const, label: '1. المعلومات' },
@@ -414,10 +441,10 @@ function CreateClassWizard({ onDone, onError, onCancel }: {
               type="button"
               disabled={s.n > 1 && !canStep1}
               onClick={() => setStep(s.n)}
-              className={`arabic px-2.5 py-1 rounded-full transition ${
+              className={`arabic px-3 py-1 rounded-full transition ${
                 step === s.n
-                  ? 'bg-blue-600 text-white font-medium'
-                  : 'bg-gray-100 text-gray-500 hover:bg-gray-200 disabled:opacity-40'
+                  ? 'bg-brand text-white font-semibold shadow-sm'
+                  : 'bg-canvas text-ink-muted hover:bg-line/70 disabled:opacity-40'
               }`}
             >
               {s.label}
@@ -429,23 +456,23 @@ function CreateClassWizard({ onDone, onError, onCancel }: {
       {step === 1 && (
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
-            <label className="arabic block text-xs font-medium text-gray-600 mb-1">اسم القسم</label>
+            <label className="arabic block text-xs font-semibold text-ink-muted mb-1">اسم القسم</label>
             <input type="text" value={name} onChange={e => setName(e.target.value)} autoFocus
                    placeholder="مثال: الخامسة أ"
-                   className="arabic w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                   className="arabic w-full border border-line bg-canvas/40 focus:bg-surface rounded-xl px-3.5 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-brand/40" />
           </div>
           <div>
-            <label className="arabic block text-xs font-medium text-gray-600 mb-1">المستوى</label>
+            <label className="arabic block text-xs font-semibold text-ink-muted mb-1">المستوى</label>
             <select value={level} onChange={e => setLevel(e.target.value)}
-                    className="arabic w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                    className="arabic w-full border border-line bg-canvas/40 focus:bg-surface rounded-xl px-3.5 py-2 text-sm">
               <option value="">—</option>
               {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
             </select>
           </div>
           <div>
-            <label className="arabic block text-xs font-medium text-gray-600 mb-1">السنة الدراسية</label>
+            <label className="arabic block text-xs font-semibold text-ink-muted mb-1">السنة الدراسية</label>
             <input type="text" value={year} onChange={e => setYear(e.target.value)} dir="ltr"
-                   className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                   className="w-full border border-line bg-canvas/40 focus:bg-surface rounded-xl px-3.5 py-2 text-sm num focus:outline-none focus:ring-2 focus:ring-brand/40" />
           </div>
         </div>
       )}
@@ -453,11 +480,11 @@ function CreateClassWizard({ onDone, onError, onCancel }: {
       {step === 2 && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <label className="arabic text-xs font-medium text-gray-600">
+            <label className="arabic text-xs font-semibold text-ink-muted">
               لصق قائمة التلاميذ — اسم في كل سطر (اختياري)
             </label>
-            <label className="arabic text-xs text-blue-600 hover:underline cursor-pointer">
-              ⬆ استيراد CSV/TXT
+            <label className="arabic inline-flex items-center gap-1 text-xs text-brand font-semibold hover:underline cursor-pointer">
+              <UploadIcon className="w-3.5 h-3.5" /> استيراد CSV/TXT
               <input
                 type="file"
                 accept=".csv,.txt"
@@ -477,9 +504,9 @@ function CreateClassWizard({ onDone, onError, onCancel }: {
             value={studentsText}
             onChange={e => setStudentsText(e.target.value)}
             placeholder={"أحمد بن علي\nمريم الطرابلسي\nيوسف المنصوري"}
-            className="arabic w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-blue-400"
+            className="arabic w-full border border-line bg-canvas/40 focus:bg-surface rounded-xl px-3.5 py-2 text-sm text-right focus:outline-none focus:ring-2 focus:ring-brand/40"
           />
-          <p className="arabic text-xs text-gray-400">
+          <p className="arabic text-xs text-ink-subtle num">
             {parsedStudents.length > 0 ? `${parsedStudents.length} تلميذ جاهز للإضافة` : 'يمكنكم تخطي هذه الخطوة وإضافة التلاميذ لاحقاً.'}
           </p>
         </div>
@@ -488,9 +515,9 @@ function CreateClassWizard({ onDone, onError, onCancel }: {
       {step === 3 && (
         <div className="space-y-3">
           <div>
-            <label className="arabic block text-xs font-medium text-gray-600 mb-1">المعلم (اختياري)</label>
+            <label className="arabic block text-xs font-semibold text-ink-muted mb-1">المعلم (اختياري)</label>
             <select value={teacherId} onChange={e => setTeacherId(e.target.value)}
-                    className="arabic w-full sm:w-64 border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                    className="arabic w-full sm:w-64 border border-line bg-canvas/40 focus:bg-surface rounded-xl px-3.5 py-2 text-sm">
               <option value="">بدون إسناد الآن</option>
               {teachers.map(t => <option key={t.id} value={t.id}>{t.full_name || t.username}</option>)}
             </select>
@@ -498,18 +525,18 @@ function CreateClassWizard({ onDone, onError, onCancel }: {
           {teacherId && (
             <div>
               <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-                <label className="arabic text-xs font-medium text-gray-600">المواد المسندة</label>
+                <label className="arabic text-xs font-semibold text-ink-muted">المواد المسندة</label>
                 <div className="flex flex-wrap gap-1.5">
                   <button type="button" onClick={() => setSubjectIds(new Set(subjects.map(s => s.id)))}
-                          className="arabic text-[11px] px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium">
+                          className="arabic text-[11px] px-2.5 py-1 rounded-xl bg-brand-light text-brand hover:bg-brand-mid/60 font-semibold transition">
                     كل المواد (معلم فصل)
                   </button>
                   <button type="button" onClick={() => setSubjectIds(new Set(subjects.filter(s => ARABIC_PACK.has(s.code)).map(s => s.id)))}
-                          className="arabic text-[11px] px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-medium">
+                          className="arabic text-[11px] px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-semibold transition">
                     مواد العربية
                   </button>
                   <button type="button" onClick={() => setSubjectIds(new Set(subjects.filter(s => SCI_FR_PACK.has(s.code)).map(s => s.id)))}
-                          className="arabic text-[11px] px-2.5 py-1 rounded-lg bg-violet-50 text-violet-700 hover:bg-violet-100 font-medium">
+                          className="arabic text-[11px] px-2.5 py-1 rounded-xl bg-violet-50 text-violet-700 hover:bg-violet-100 font-semibold transition">
                     العلمية والفرنسية
                   </button>
                 </div>
@@ -520,10 +547,10 @@ function CreateClassWizard({ onDone, onError, onCancel }: {
                     type="button"
                     key={s.id}
                     onClick={() => toggleSubject(s.id)}
-                    className={`arabic text-xs px-3 py-1.5 rounded-full border transition ${
+                    className={`arabic text-xs px-3 py-1.5 rounded-full border font-medium transition ${
                       subjectIds.has(s.id)
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                        ? 'bg-brand text-white border-brand shadow-sm'
+                        : 'bg-surface text-ink-muted border-line hover:border-brand/40'
                     }`}
                   >
                     {s.name_ar}
@@ -535,27 +562,27 @@ function CreateClassWizard({ onDone, onError, onCancel }: {
         </div>
       )}
 
-      <div className="flex items-center gap-2 pt-2 border-t border-gray-100">
+      <div className="flex items-center gap-2 pt-2 border-t border-line">
         {step < 3 && (
           <button
             type="button"
             disabled={!canStep1}
             onClick={() => setStep((step + 1) as 2 | 3)}
-            className="arabic px-4 py-2 bg-blue-50 hover:bg-blue-100 disabled:opacity-40 text-blue-700 rounded-lg text-sm font-medium"
+            className="arabic inline-flex items-center gap-1 px-4 py-2 bg-brand-light hover:bg-brand-mid/60 disabled:opacity-40 text-brand rounded-xl text-sm font-semibold transition"
           >
-            التالي: {step === 1 ? 'التلاميذ' : 'الإسناد'} ←
+            التالي: {step === 1 ? 'التلاميذ' : 'الإسناد'} <ChevronLeftIcon className="w-4 h-4" />
           </button>
         )}
         <button
           type="button"
           disabled={!canStep1 || submitting}
           onClick={() => void finish()}
-          className="arabic px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-medium"
+          className="arabic px-5 py-2 bg-brand hover:bg-brand-hover disabled:bg-gray-300 text-white rounded-xl text-sm font-semibold shadow-sm transition"
         >
           {submitting ? 'جاري الإنشاء…' : 'إنشاء القسم'}
         </button>
         <button type="button" onClick={onCancel}
-                className="arabic mr-auto px-4 py-2 text-sm text-gray-500 hover:text-gray-700">
+                className="arabic mr-auto px-4 py-2 text-sm text-ink-muted hover:text-ink transition">
           إلغاء
         </button>
       </div>

@@ -9,11 +9,12 @@ import { useAuth } from '../auth'
 import { pendingCount, onQueueChange } from '../lib/offlineQueue'
 import { subjectStyle, relativeTimeAr } from '../lib/subjectStyle'
 import AppShell from '../components/AppShell'
+import { DashboardSkeleton, EmptyState } from '../components/Skeleton'
 import {
-  UserIcon, ShieldIcon, CalendarIcon, FolderIcon, ClockIcon,
+  UserIcon, FolderIcon, ClockIcon,
   UsersIcon, SchoolIcon, GraduationCapIcon,
   AlertIcon, LockIcon, EditIcon, PlusIcon, LinkIcon, GridIcon,
-  MegaphoneIcon, WifiOffIcon, BookOpenIcon, ChevronLeftIcon,
+  MegaphoneIcon, WifiOffIcon, BookOpenIcon, ChevronLeftIcon, SparklesIcon,
 } from '../components/icons'
 
 const TRIMESTERS = [1, 2, 3]
@@ -73,11 +74,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      {isLoading && (
-        <div className="flex justify-center py-24">
-          <div className="animate-spin w-8 h-8 border-4 border-brand border-t-transparent rounded-full" />
-        </div>
-      )}
+      {isLoading && <DashboardSkeleton />}
 
       {stats && <NowStrip isAdmin={isAdmin} />}
       {stats?.role === 'teacher' && <TeacherView stats={stats} />}
@@ -253,11 +250,11 @@ function TeacherView({ stats }: { stats: TeacherStats }) {
 
   if (stats.cards.length === 0) {
     return (
-      <div className="bg-surface border border-line rounded-3xl text-center py-20 px-6 shadow-card">
-        <SchoolIcon className="w-12 h-12 mx-auto mb-3 text-ink-subtle/40" />
-        <p className="arabic text-base font-bold text-ink">لا أقسام مسندة إليكم بعد</p>
-        <p className="arabic text-sm text-ink-muted mt-1">اتصلوا بإدارة المدرسة ليتم إسناد أقسامكم وموادكم.</p>
-      </div>
+      <EmptyState
+        Icon={SchoolIcon}
+        title="لا أقسام مسندة إليكم بعد"
+        description="اتصلوا بإدارة المدرسة ليتم إسناد أقسامكم وموادكم."
+      />
     )
   }
 
@@ -265,21 +262,21 @@ function TeacherView({ stats }: { stats: TeacherStats }) {
     <div className="space-y-6">
       {/* 1-click Continue Last Session Hero CTA */}
       {latestCard && latestCard.last_session && (
-        <div className="bg-brand text-white rounded-3xl p-5 md:p-6 shadow-float flex items-center justify-between flex-wrap gap-4">
-          <div>
-            <span className="arabic inline-block text-[11px] bg-white/15 px-2.5 py-0.5 rounded-full mb-2">
-              آخر جلسة نشطة
+        <div className="relative overflow-hidden bg-gradient-to-l from-brand via-brand to-brand-hover text-white rounded-3xl p-5 md:p-6 shadow-float flex items-center justify-between flex-wrap gap-4">
+          <div className="relative z-10">
+            <span className="arabic inline-flex items-center gap-1.5 text-[11px] bg-white/15 px-2.5 py-1 rounded-full mb-2">
+              <SparklesIcon className="w-3 h-3" /> آخر جلسة نشطة
             </span>
             <h2 className="arabic text-lg md:text-xl font-bold">
               {latestCard.subject_name} — {latestCard.class_name}
             </h2>
-            <p className="arabic text-xs text-white/80 mt-0.5">
+            <p className="arabic text-xs text-white/80 mt-0.5 num">
               الثلاثي {latestCard.last_session.trimester} · {latestCard.last_session.exam_type} · {latestCard.student_count} تلميذ
             </p>
           </div>
           <button
             onClick={() => navigate(`/sessions/${latestCard.last_session!.id}`)}
-            className="arabic bg-white text-brand hover:bg-canvas px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm transition flex items-center gap-1.5"
+            className="relative z-10 arabic bg-white text-brand hover:bg-canvas px-5 py-2.5 rounded-xl text-sm font-bold shadow-sm transition flex items-center gap-1.5"
           >
             مواصلة إدخال الأعداد <ChevronLeftIcon className="w-4 h-4" />
           </button>

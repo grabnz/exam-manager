@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../api/client'
 import { useAuth } from '../auth'
+import { KeyIcon } from '../components/icons'
 
 export default function ChangePassword() {
   const navigate = useNavigate()
@@ -32,63 +33,65 @@ export default function ChangePassword() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
+    <div className="min-h-screen bg-canvas flex items-center justify-center px-4" dir="rtl">
       <div className="w-full max-w-sm">
-        <div className="text-center mb-8">
-          <div className="text-5xl mb-3">🔑</div>
-          <h1 className="arabic text-2xl font-bold text-gray-900">تغيير كلمة المرور</h1>
+        <div className="text-center mb-6">
+          <div className="w-14 h-14 mx-auto mb-3 rounded-2xl bg-gradient-to-br from-brand to-brand-hover text-white flex items-center justify-center shadow-float">
+            <KeyIcon className="w-6 h-6" />
+          </div>
+          <h1 className="arabic text-2xl font-bold text-ink">تغيير كلمة المرور</h1>
           {forced && (
-            <p className="arabic text-sm text-amber-600 mt-2" dir="rtl">
+            <p className="arabic text-sm text-amber-700 mt-2">
               يجب تغيير كلمة المرور المؤقتة قبل المواصلة.
             </p>
           )}
         </div>
 
-        <form onSubmit={handleSubmit} className="bg-white border border-gray-200 rounded-2xl p-6 space-y-4">
+        <form onSubmit={handleSubmit} className="bg-surface border border-line rounded-3xl p-6 space-y-4 shadow-card">
           {error && (
-            <div className="arabic bg-red-50 border border-red-200 text-red-700 px-4 py-2.5 rounded-lg text-sm text-right" dir="rtl">
+            <div className="arabic bg-rose-50 border border-rose-200 text-rose-700 px-4 py-2.5 rounded-xl text-sm text-right">
               {error}
             </div>
           )}
 
           <div>
-            <label className="arabic block text-sm font-medium text-gray-700 mb-1.5 text-right" dir="rtl">
+            <label className="arabic block text-xs font-semibold text-ink-muted mb-1.5 text-right">
               كلمة المرور الحالية
             </label>
             <input type="password" value={current} onChange={e => setCurrent(e.target.value)}
-                   autoComplete="current-password" autoFocus
-                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                   autoComplete="current-password" autoFocus dir="ltr"
+                   className="w-full border border-line bg-canvas/40 focus:bg-surface rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand transition" />
           </div>
 
           <div>
-            <label className="arabic block text-sm font-medium text-gray-700 mb-1.5 text-right" dir="rtl">
+            <label className="arabic block text-xs font-semibold text-ink-muted mb-1.5 text-right">
               كلمة المرور الجديدة
             </label>
             <input type="password" value={pw1} onChange={e => setPw1(e.target.value)}
-                   autoComplete="new-password"
-                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                   autoComplete="new-password" dir="ltr"
+                   className="w-full border border-line bg-canvas/40 focus:bg-surface rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand transition" />
           </div>
 
           <div>
-            <label className="arabic block text-sm font-medium text-gray-700 mb-1.5 text-right" dir="rtl">
+            <label className="arabic block text-xs font-semibold text-ink-muted mb-1.5 text-right">
               تأكيد كلمة المرور الجديدة
             </label>
             <input type="password" value={pw2} onChange={e => setPw2(e.target.value)}
-                   autoComplete="new-password"
-                   className="w-full border border-gray-200 rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-400" />
+                   autoComplete="new-password" dir="ltr"
+                   className="w-full border border-line bg-canvas/40 focus:bg-surface rounded-xl px-4 py-2.5 focus:outline-none focus:ring-2 focus:ring-brand/40 focus:border-brand transition" />
           </div>
 
           <button
             type="submit"
             disabled={loading || !current || !pw1 || !pw2}
-            className="arabic w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-xl font-medium transition"
+            className="arabic w-full py-3 bg-brand hover:bg-brand-hover disabled:bg-gray-300 text-white rounded-xl text-sm font-semibold shadow-sm transition"
           >
             {loading ? 'جاري الحفظ…' : 'تغيير كلمة المرور'}
           </button>
 
           {!forced && (
             <button type="button" onClick={() => navigate(-1)}
-                    className="arabic w-full py-2 text-sm text-gray-500 hover:text-gray-700">
+                    className="arabic w-full py-2 text-sm text-ink-muted hover:text-ink transition">
               إلغاء
             </button>
           )}

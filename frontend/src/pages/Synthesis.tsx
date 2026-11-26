@@ -2,6 +2,9 @@ import { useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api, SettingsData, SynthesisData } from '../api/client'
+import AppShell from '../components/AppShell'
+import { ListSkeleton } from '../components/Skeleton'
+import { ArrowRightIcon, PrinterIcon, AwardIcon, TrendingUpIcon } from '../components/icons'
 
 const TRIMESTERS = [1, 2, 3]
 
@@ -51,70 +54,59 @@ export default function Synthesis() {
   }, [data])
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20 md:pb-8" dir="rtl">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-4 md:px-6 py-4 print:hidden">
-        <button onClick={() => navigate(`/classes/${id}`)}
-                className="arabic text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1 mb-2">
-          → {data?.class_name ?? 'رجوع إلى القسم'}
-        </button>
-        <div className="flex items-center justify-between flex-wrap gap-3">
-          <div>
-            <h1 className="arabic text-xl font-bold text-gray-900">
-              كشف النتائج والمقارنة — {data?.class_name}
-            </h1>
-            {data && (
-              <p className="arabic text-xs text-gray-400">
-                {data.level ? `${data.level} · ` : ''}{data.school_year} · الثلاثي {trimester}
-              </p>
-            )}
+    <AppShell
+      title={`كشف النتائج والمقارنة — ${data?.class_name ?? ''}`}
+      subtitle={data ? `${data.level ? `${data.level} · ` : ''}${data.school_year} · الثلاثي ${trimester}` : undefined}
+      actions={
+        <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={() => navigate(`/classes/${id}`)}
+            className="arabic inline-flex items-center gap-1 text-xs border border-line bg-surface hover:border-brand/40 text-ink-muted hover:text-brand px-3 py-2 rounded-xl font-medium transition"
+          >
+            <ArrowRightIcon className="w-3.5 h-3.5" /> القسم
+          </button>
+          <div className="flex bg-canvas border border-line rounded-xl p-1">
+            {TRIMESTERS.map(t => (
+              <button
+                key={t}
+                onClick={() => { setTrimester(t); setSelectedStudentId(null) }}
+                className={`arabic px-3 py-1 text-xs rounded-lg font-semibold transition ${
+                  trimester === t ? 'bg-brand text-white shadow-sm' : 'text-ink-muted hover:text-ink'
+                }`}
+              >
+                ث{t}
+              </button>
+            ))}
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex bg-gray-100 rounded-xl p-1">
-              {TRIMESTERS.map(t => (
-                <button
-                  key={t}
-                  onClick={() => { setTrimester(t); setSelectedStudentId(null) }}
-                  className={`arabic px-3 py-1 text-xs rounded-lg font-medium transition ${
-                    trimester === t ? 'bg-white text-blue-700 shadow-sm' : 'text-gray-500 hover:text-gray-800'
-                  }`}
-                >
-                  الثلاثي {t}
-                </button>
-              ))}
-            </div>
-            <button onClick={() => window.print()}
-                    className="arabic text-xs bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl font-medium">
-              طباعة / PDF
-            </button>
-          </div>
+          <button onClick={() => window.print()}
+                  className="arabic inline-flex items-center gap-1.5 text-xs bg-brand hover:bg-brand-hover text-white px-4 py-2 rounded-xl font-semibold shadow-sm transition">
+            <PrinterIcon className="w-3.5 h-3.5" /> طباعة / PDF
+          </button>
         </div>
-
-        <div className="flex gap-2 mt-4">
+      }
+    >
+      <div className="space-y-5">
+        <div className="flex gap-1.5 p-1.5 bg-surface border border-line rounded-2xl shadow-card w-fit print:hidden">
           <button
             onClick={() => setTab('synthesis')}
-            className={`arabic text-xs px-4 py-2 rounded-xl font-medium transition ${
-              tab === 'synthesis' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            className={`arabic inline-flex items-center gap-1.5 text-xs px-4 py-2 rounded-xl font-semibold transition ${
+              tab === 'synthesis' ? 'bg-brand text-white shadow-sm' : 'text-ink-muted hover:text-ink hover:bg-canvas'
             }`}
           >
-            الجدول الجامع وبطاقات الأعداد
+            <AwardIcon className="w-3.5 h-3.5" /> الجدول الجامع وبطاقات الأعداد
           </button>
           <button
             onClick={() => setTab('progression')}
-            className={`arabic text-xs px-4 py-2 rounded-xl font-medium transition ${
-              tab === 'progression' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            className={`arabic inline-flex items-center gap-1.5 text-xs px-4 py-2 rounded-xl font-semibold transition ${
+              tab === 'progression' ? 'bg-brand text-white shadow-sm' : 'text-ink-muted hover:text-ink hover:bg-canvas'
             }`}
           >
-            مقارنة التقييمات (التدارك)
+            <TrendingUpIcon className="w-3.5 h-3.5" /> مقارنة التقييمات (التدارك)
           </button>
         </div>
-      </header>
 
-      <main className="max-w-6xl mx-auto px-4 md:px-6 py-6">
         {isLoading || !data ? (
-          <div className="flex justify-center py-20">
-            <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full" />
-          </div>
+          <ListSkeleton rows={6} />
         ) : selectedStudent ? (
           /* Printable Individual Student Report Card (بطاقة أعداد) */
           <div className="max-w-xl mx-auto bg-white border border-gray-200 rounded-2xl p-6 space-y-5 shadow-sm print:border-0 print:shadow-none">
@@ -338,7 +330,7 @@ export default function Synthesis() {
             )}
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </AppShell>
   )
 }
