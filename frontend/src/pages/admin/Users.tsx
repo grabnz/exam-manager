@@ -106,6 +106,18 @@ export default function Users() {
                 key={u.id}
                 user={u}
                 isMe={u.id === me?.id}
+                onEditHours={async () => {
+                  const val = await ui.prompt({
+                    title: 'النصاب الأسبوعي (ساعات)',
+                    label: `عدد ساعات العمل الأسبوعية للمعلم ${u.full_name || u.username} (مثال: 18، 20، 22، 25)`,
+                    defaultValue: String(u.max_weekly_hours ?? 25),
+                    dir: 'ltr',
+                  })
+                  const num = val ? parseFloat(val) : NaN
+                  if (!isNaN(num) && num > 0 && num <= 40) {
+                    run(() => api.users.update(u.id, { max_weekly_hours: num }))
+                  }
+                }}
                 onToggleActive={() => run(() => api.users.update(u.id, { is_active: !u.is_active }))}
                 onResetPassword={async () => {
                   const pw = await ui.prompt({
@@ -191,13 +203,14 @@ function BulkUsersForm({ onCreated, onError }: {
 
 // ── Create user form ───────────────────────────────────────────────────────────
 function CreateUserForm({ onCreate }: {
-  onCreate: (data: { username: string; password: string; full_name: string; role: string }) => Promise<void> | void
+  onCreate: (data: { username: string; password: string; full_name: string; role: string; max_weekly_hours?: number }) => Promise<void> | void
 }) {
   const [open,     setOpen]     = useState(false)
   const [username, setUsername] = useState('')
   const [fullName, setFullName] = useState('')
   const [password, setPassword] = useState('')
   const [role,     setRole]     = useState('teacher')
+  const [maxHours, setMaxHours] = useState('18')
 
   function generatePassword() {
     const chars = 'abcdefghjkmnpqrstuvwxyz23456789'
@@ -206,8 +219,8 @@ function CreateUserForm({ onCreate }: {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
-    await onCreate({ username, password, full_name: fullName, role })
-    setUsername(''); setFullName(''); setPassword(''); setRole('teacher')
+    await onCreate({ username, password, full_name: fullName, role, max_weekly_hours: parseFloat(maxHours) || 25 })
+    setUsername(''); setFullName(''); setPassword(''); setRole('teacher'); setMaxHours('18')
     setOpen(false)
   }
 
@@ -253,6 +266,23 @@ function CreateUserForm({ onCreate }: {
             <option value="admin">مدير (إدارة الحسابات)</option>
           </select>
         </div>
+        {role === 'teacher' && (
+          <div>
+            <label className="arabic block text-xs font-medium text-gray-600 mb-1">النصاب الأسبوعي (ساعات)</label>
+            <div className="flex gap-1.5 items-center">
+              <input type="number" min={1} max={40} step={0.5} value={maxHours} onChange={e => setMaxHours(e.target.value)} dir="ltr"
+                     className="w-20 border border-gray-200 rounded-lg px-2.5 py-2 text-sm text-center num" />
+              {[18, 20, 22, 25].map(h => (
+                <button key={h} type="button" onClick={() => setMaxHours(String(h))}
+                        className={`px-2 py-1.5 rounded-lg text-xs border num ${
+                          Number(maxHours) === h ? 'bg-brand text-white border-brand' : 'bg-white text-gray-600 border-gray-200'
+                        }`}>
+                  {h}h
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <p className="arabic text-xs text-gray-400">
@@ -274,9 +304,10 @@ function CreateUserForm({ onCreate }: {
 }
 
 // ── User row ───────────────────────────────────────────────────────────────────
-function UserItem({ user, isMe, onToggleActive, onResetPassword, onDelete }: {
+function UserItem({ user, isMe, onEditHours, onToggleActive, onResetPassword, onDelete }: {
   user: UserRow
   isMe: boolean
+  onEditHours: () => void
   onToggleActive: () => void
   onResetPassword: () => void
   onDelete: () => void
@@ -289,6 +320,12 @@ function UserItem({ user, isMe, onToggleActive, onResetPassword, onDelete }: {
             {user.full_name || user.username}
           </span>
           <span className="text-xs text-gray-400 font-mono" dir="ltr">{user.username}</span>
+          {user.role === 'teacher' && (
+            <button onClick={onEditHours} title="تعديل النصاب الأسبوعي"
+                    className="arabic text-[11px] bg-brand-light text-brand hover:bg-brand-mid/50 px-2 py-0.5 rounded-full font-semibold num transition">
+              {user.max_weekly_hours ?? 25} ساعة/أسبوع ✎
+            </button>
+          )}
           {user.role === 'admin' && (
             <span className="arabic text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full">مدير</span>
           )}

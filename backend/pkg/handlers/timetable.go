@@ -52,6 +52,7 @@ func slotOut(s *db.TimetableSlot) map[string]any {
 		"end":          s.End,
 		"room":         s.Room,
 		"label":        s.Label,
+		"is_pinned":    s.IsPinned,
 	}
 }
 

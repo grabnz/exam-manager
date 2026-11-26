@@ -71,6 +71,7 @@ export interface AuthUser {
 export interface UserRow extends AuthUser {
   is_active: boolean
   class_count: number
+  max_weekly_hours: number
 }
 
 export interface TrimesterStatus {
@@ -125,6 +126,31 @@ export interface TimetableSlot {
   day: number            // ISO 1=Monday … 7=Sunday
   start: string; end: string
   room: string; label: string
+  is_pinned?: boolean
+}
+export interface RoomRow {
+  id: string; name: string; room_type: 'standard' | 'computer' | 'yard' | 'multipurpose'; is_active: boolean
+}
+export interface CurriculumRow {
+  id: string; level: string; subject_id: string; subject_code: string; subject_name: string
+  weekly_hours: number; block_size: number; cognitive_weight: 'heavy' | 'light'; room_type: string
+}
+export interface GeneratedSlot {
+  teacher_id: string; teacher_name: string
+  class_id: string | null; class_name: string | null
+  subject_id: string | null; subject_code: string | null; subject_name: string | null
+  day: number; start: string; end: string; room: string; label: string; is_pinned: boolean
+}
+export interface ScheduleResult {
+  slots: GeneratedSlot[]
+  quality_score: number
+  teacher_loads: {
+    teacher_id: string; teacher_name: string
+    max_weekly_hours: number; assigned_hours: number; scheduled_hours: number
+    gap_hours: number; saturday_hours: number
+  }[]
+  warnings: string[]
+  unplaced: { class_name: string; subject_name: string; teacher_name: string; hours: number; reason: string }[]
 }
 export interface ScoreBucket { label: string; count: number }
 
@@ -276,7 +302,7 @@ export const api = {
   },
   users: {
     list: () => req<UserRow[]>('/users'),
-    create: (data: { username: string; password: string; full_name: string; grade?: string; role?: string }) =>
+    create: (data: { username: string; password: string; full_name: string; grade?: string; role?: string; max_weekly_hours?: number }) =>
       req<UserRow>('/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -288,7 +314,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ users }),
       }),
-    update: (id: string, data: { full_name?: string; grade?: string; is_active?: boolean }) =>
+    update: (id: string, data: { full_name?: string; grade?: string; is_active?: boolean; max_weekly_hours?: number }) =>
       req<UserRow>(`/users/${id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -354,7 +380,39 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       }),
+    togglePin: (id: string) => req<{ ok: boolean; is_pinned: boolean }>(`/timetable/${id}/pin`, { method: 'PATCH' }),
     delete: (id: string) => req<{ ok: boolean }>(`/timetable/${id}`, { method: 'DELETE' }),
+    generate: (cfg?: { days?: number[]; morning_slots?: string[]; afternoon_slots?: string[] }) =>
+      req<ScheduleResult>('/timetable/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cfg ?? {}),
+      }),
+    commit: (slots: GeneratedSlot[]) =>
+      req<{ ok: boolean }>('/timetable/commit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ slots }),
+      }),
+  },
+  rooms: {
+    list: () => req<RoomRow[]>('/rooms'),
+    create: (name: string, roomType = 'standard') =>
+      req<RoomRow>('/rooms', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, room_type: roomType }),
+      }),
+    delete: (id: string) => req<{ ok: boolean }>(`/rooms/${id}`, { method: 'DELETE' }),
+  },
+  curriculum: {
+    list: () => req<CurriculumRow[]>('/curriculum'),
+    save: (items: { level: string; subject_id: string; weekly_hours: number; block_size?: number; cognitive_weight?: string; room_type?: string }[]) =>
+      req<{ ok: boolean }>('/curriculum', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items }),
+      }),
   },
   documents: {
     list: () => req<DocumentRow[]>('/documents'),

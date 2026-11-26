@@ -19,12 +19,17 @@ type UsersHandler struct {
 }
 
 func userRow(u *db.User, classCount int) map[string]any {
+	maxH := u.MaxWeeklyHours
+	if maxH <= 0 {
+		maxH = 25
+	}
 	return map[string]any{
 		"id":                   u.ID,
 		"username":             u.Username,
 		"full_name":            u.FullName,
 		"grade":                u.Grade,
 		"role":                 u.Role,
+		"max_weekly_hours":     maxH,
 		"is_active":            u.IsActive,
 		"must_change_password": u.MustChangePassword,
 		"class_count":          classCount,
@@ -54,11 +59,12 @@ func (h *UsersHandler) List(w http.ResponseWriter, r *http.Request) {
 
 func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Username string `json:"username"`
-		Password string `json:"password"`
-		FullName string `json:"full_name"`
-		Grade    string `json:"grade"`
-		Role     string `json:"role"`
+		Username       string   `json:"username"`
+		Password       string   `json:"password"`
+		FullName       string   `json:"full_name"`
+		Grade          string   `json:"grade"`
+		Role           string   `json:"role"`
+		MaxWeeklyHours *float64 `json:"max_weekly_hours"`
 	}
 	if err := httpx.DecodeJSON(r, &body); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "Invalid request body")
@@ -92,12 +98,17 @@ func (h *UsersHandler) Create(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, "Failed to hash password")
 		return
 	}
+	maxHours := 25.0
+	if body.MaxWeeklyHours != nil && *body.MaxWeeklyHours > 0 {
+		maxHours = *body.MaxWeeklyHours
+	}
 	u := db.User{
 		Username:           username,
 		PasswordHash:       hashed,
 		FullName:           strings.TrimSpace(body.FullName),
 		Grade:              strings.TrimSpace(body.Grade),
 		Role:               role,
+		MaxWeeklyHours:     maxHours,
 		IsActive:           true,
 		MustChangePassword: true,
 	}
@@ -117,9 +128,10 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		FullName *string `json:"full_name"`
-		Grade    *string `json:"grade"`
-		IsActive *bool   `json:"is_active"`
+		FullName       *string  `json:"full_name"`
+		Grade          *string  `json:"grade"`
+		IsActive       *bool    `json:"is_active"`
+		MaxWeeklyHours *float64 `json:"max_weekly_hours"`
 	}
 	if err := httpx.DecodeJSON(r, &body); err != nil {
 		httpx.WriteError(w, http.StatusBadRequest, "Invalid request body")
@@ -137,6 +149,9 @@ func (h *UsersHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	if body.IsActive != nil {
 		u.IsActive = *body.IsActive
+	}
+	if body.MaxWeeklyHours != nil && *body.MaxWeeklyHours > 0 {
+		u.MaxWeeklyHours = *body.MaxWeeklyHours
 	}
 	if err := h.DB.Save(&u).Error; err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err.Error())

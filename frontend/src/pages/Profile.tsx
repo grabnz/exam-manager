@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { api, TeacherProfile } from '../api/client'
 import { useAuth } from '../auth'
+import AppShell from '../components/AppShell'
 
 const GRADES = [
   'معلم',
@@ -12,7 +12,6 @@ const GRADES = [
 ]
 
 export default function Profile() {
-  const navigate = useNavigate()
   const { user, updateUser } = useAuth()
   const [form,    setForm]    = useState<TeacherProfile>({ name: '', grade: '', subject: '' })
   const [loading, setLoading] = useState(true)
@@ -33,22 +32,14 @@ export default function Profile() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-4 md:px-6 py-4">
-        <button onClick={() => navigate('/')}
-                className="text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1 mb-3">
-          ← Accueil
-        </button>
-        <h1 className="text-xl font-bold text-gray-900">Profil de l'enseignant</h1>
-      </header>
-
-      <main className="max-w-lg mx-auto px-4 md:px-6 py-8">
+    <AppShell title="الملف الشخصي" subtitle="بيانات المعلم والرتبة">
+      <div className="max-w-lg">
         {loading ? (
           <div className="flex justify-center py-20">
-            <div className="animate-spin w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full" />
+            <div className="animate-spin w-8 h-8 border-4 border-brand border-t-transparent rounded-full" />
           </div>
         ) : (
-          <div className="bg-white border border-gray-200 rounded-2xl p-6 space-y-5">
+          <div className="bg-surface border border-line rounded-3xl p-6 space-y-5 shadow-card">
 
             {/* Avatar placeholder */}
             <div className="flex justify-center">
@@ -125,13 +116,13 @@ export default function Profile() {
             <button
               onClick={handleSave}
               disabled={saving || !form.name.trim()}
-              className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-xl font-medium transition"
+              className="arabic w-full py-3 bg-brand hover:bg-brand-hover disabled:bg-gray-300 text-white rounded-xl font-semibold shadow-sm transition"
             >
-              {saving ? 'Enregistrement…' : saved ? 'Enregistré ✓' : 'Enregistrer'}
+              {saving ? 'جاري الحفظ…' : saved ? 'تم الحفظ ✓' : 'حفظ التغييرات'}
             </button>
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </AppShell>
   )
 }

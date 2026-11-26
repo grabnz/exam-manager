@@ -1,9 +1,9 @@
 import { useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, DocumentRow } from '../api/client'
 import { useAuth } from '../auth'
 import { relativeTimeAr } from '../lib/subjectStyle'
+import AppShell from '../components/AppShell'
 
 function fileIcon(contentType: string, filename: string): string {
   const ext = filename.split('.').pop()?.toLowerCase() ?? ''
@@ -23,7 +23,6 @@ function humanSize(bytes: number): string {
 }
 
 export default function Documents() {
-  const navigate = useNavigate()
   const qc = useQueryClient()
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
@@ -63,29 +62,19 @@ export default function Documents() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-4 md:px-6 py-4">
-        <button onClick={() => navigate('/')}
-                className="text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1 mb-3">
-          ← الرئيسية
-        </button>
-        <div className="flex items-center justify-between" dir="rtl">
-          <div>
-            <h1 className="arabic text-xl font-bold text-gray-900">📂 الوثائق الرسمية</h1>
-            <p className="arabic text-sm text-gray-400">
-              {isAdmin ? 'منشورة من الإدارة لجميع المعلمين' : 'وثائق منشورة من إدارة المدرسة'}
-            </p>
-          </div>
-          {isAdmin && (
-            <button onClick={() => fileRef.current?.click()} disabled={uploading}
-                    className="arabic bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white px-4 py-2 rounded-xl text-sm font-medium transition">
-              ⬆ نشر وثيقة
-            </button>
-          )}
-        </div>
-      </header>
-
-      <main className="max-w-3xl mx-auto px-4 md:px-6 py-6 space-y-4" dir="rtl">
+    <AppShell
+      title="الوثائق الرسمية"
+      subtitle={isAdmin ? 'منشورة من الإدارة لجميع المعلمين' : 'وثائق منشورة من إدارة المدرسة'}
+      actions={
+        isAdmin ? (
+          <button onClick={() => fileRef.current?.click()} disabled={uploading}
+                  className="arabic bg-brand hover:bg-brand-hover disabled:bg-gray-300 text-white px-4 py-2 rounded-xl text-xs md:text-sm font-semibold shadow-sm transition">
+            ⬆ نشر وثيقة
+          </button>
+        ) : undefined
+      }
+    >
+      <div className="max-w-3xl space-y-4" dir="rtl">
         {error && (
           <div className="arabic bg-red-50 border border-red-200 text-red-700 px-4 py-2.5 rounded-xl text-sm">{error}</div>
         )}
@@ -163,7 +152,7 @@ export default function Documents() {
             ))}
           </div>
         )}
-      </main>
-    </div>
+      </div>
+    </AppShell>
   )
 }

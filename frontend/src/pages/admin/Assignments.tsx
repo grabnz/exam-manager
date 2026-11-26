@@ -1,12 +1,13 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, AssignmentRow, Subject, UserRow, YearGroup } from '../../api/client'
+import { api, AssignmentRow, CurriculumRow, Subject, UserRow, YearGroup } from '../../api/client'
 import { useUI } from '../../components/ui'
 
 export default function Assignments() {
   const qc = useQueryClient()
   const ui = useUI()
   const [error, setError] = useState('')
+  const [view, setView] = useState<'matrix' | 'list'>('matrix')
 
   const { data: assignments = [] } = useQuery<AssignmentRow[]>({
     queryKey: ['assignments'], queryFn: api.assignments.list,
@@ -20,9 +21,32 @@ export default function Assignments() {
   const { data: years = [] } = useQuery<YearGroup[]>({
     queryKey: ['classes'], queryFn: api.classes.list,
   })
+  const { data: curricula = [] } = useQuery<CurriculumRow[]>({
+    queryKey: ['curriculum'], queryFn: api.curriculum.list,
+  })
 
   const teachers = users.filter(u => u.role === 'teacher' && u.is_active)
   const classes  = years.flatMap(y => y.classes.map(c => ({ ...c, year: y.label })))
+
+  // Compute live assigned weekly hours per teacher
+  const teacherHours = useMemo(() => {
+    const curMap = new Map<string, number>()
+    const curFallback = new Map<string, number>()
+    for (const c of curricula) {
+      curMap.set(`${c.level}|${c.subject_id}`, c.weekly_hours)
+      if (!curFallback.has(c.subject_id)) curFallback.set(c.subject_id, c.weekly_hours)
+    }
+    const classLevel = new Map<string, string>()
+    for (const c of classes) classLevel.set(c.id, c.level || '')
+
+    const totals = new Map<string, number>()
+    for (const a of assignments) {
+      const lvl = classLevel.get(a.class_id) || ''
+      const h = curMap.get(`${lvl}|${a.subject_id}`) ?? curFallback.get(a.subject_id) ?? 2
+      totals.set(a.teacher_id, (totals.get(a.teacher_id) ?? 0) + h)
+    }
+    return totals
+  }, [assignments, curricula, classes])
 
   async function run(fn: () => Promise<unknown>) {
     setError('')
@@ -44,12 +68,55 @@ export default function Assignments() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir="rtl">
       {error && (
-        <div className="arabic bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm text-right" dir="rtl">
+        <div className="arabic bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm text-right">
           {error}
         </div>
       )}
+
+      {/* Live Teacher Weekly Load Meters */}
+      {teachers.length > 0 && (
+        <section className="bg-surface border border-line rounded-2xl p-4 shadow-card">
+          <h2 className="arabic text-xs font-bold text-ink-muted mb-3">النصاب الأسبوعي للمعلمين (المسند / الحد القانوني)</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+            {teachers.map(t => {
+              const assigned = teacherHours.get(t.id) ?? 0
+              const maxH = t.max_weekly_hours || 25
+              const over = assigned > maxH
+              const full = assigned === maxH
+              const pct = Math.min(100, Math.round((assigned / maxH) * 100))
+              return (
+                <div key={t.id} className={`rounded-xl border p-2.5 ${over ? 'bg-rose-50/70 border-rose-200' : full ? 'bg-emerald-50/60 border-emerald-200' : 'bg-canvas border-line'}`}>
+                  <div className="flex items-center justify-between text-xs mb-1.5">
+                    <span className="arabic font-semibold text-ink truncate">{t.full_name || t.username}</span>
+                    <span className={`font-bold num ${over ? 'text-rose-700' : full ? 'text-emerald-700' : 'text-brand'}`} dir="ltr">
+                      {assigned}/{maxH}h {over ? '⚠' : full ? '✓' : ''}
+                    </span>
+                  </div>
+                  <div className="h-1.5 bg-white rounded-full overflow-hidden">
+                    <div className={`h-full rounded-full ${over ? 'bg-rose-500' : full ? 'bg-emerald-500' : 'bg-brand'}`} style={{ width: `${pct}%` }} />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* View toggle + quick form */}
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="inline-flex bg-surface border border-line rounded-xl p-1">
+          <button onClick={() => setView('matrix')}
+                  className={`arabic text-xs px-3 py-1.5 rounded-lg font-medium transition ${view === 'matrix' ? 'bg-brand text-white' : 'text-ink-muted hover:text-ink'}`}>
+            جدول الإسناد الشبكي
+          </button>
+          <button onClick={() => setView('list')}
+                  className={`arabic text-xs px-3 py-1.5 rounded-lg font-medium transition ${view === 'list' ? 'bg-brand text-white' : 'text-ink-muted hover:text-ink'}`}>
+            عرض القائمة
+          </button>
+        </div>
+      </div>
 
       <AddAssignmentForm
         teachers={teachers}
@@ -61,9 +128,60 @@ export default function Assignments() {
       />
 
       {classes.length === 0 ? (
-        <p className="arabic text-center text-gray-400 py-10" dir="rtl">
+        <p className="arabic text-center text-gray-400 py-10">
           أنشئوا الأقسام أولاً من تبويب «الأقسام».
         </p>
+      ) : view === 'matrix' ? (
+        <div className="bg-surface border border-line rounded-2xl overflow-auto shadow-card">
+          <table className="text-xs border-collapse min-w-max w-full">
+            <thead>
+              <tr className="bg-canvas">
+                <th className="arabic border border-line px-3 py-2.5 text-right font-bold text-ink sticky start-0 bg-canvas min-w-[140px]">القسم</th>
+                {subjects.map(s => (
+                  <th key={s.id} className="arabic border border-line px-2 py-2.5 text-center font-semibold text-ink-muted min-w-[115px]">{s.name_ar}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {classes.map(c => {
+                const cRows = byClass.get(c.id) ?? []
+                return (
+                  <tr key={c.id} className="hover:bg-canvas/50">
+                    <td className="arabic border border-line px-3 py-2 font-semibold text-ink sticky start-0 bg-surface">
+                      {c.name}
+                      {c.level && <span className="block text-[10px] text-ink-subtle font-normal">{c.level}</span>}
+                    </td>
+                    {subjects.map(s => {
+                      const cur = cRows.find(a => a.subject_id === s.id)
+                      return (
+                        <td key={s.id} className="border border-line p-1 text-center">
+                          <select
+                            value={cur?.teacher_id ?? ''}
+                            onChange={async e => {
+                              const nextTid = e.target.value
+                              if (cur) await run(() => api.assignments.delete(cur.id))
+                              if (nextTid) await run(() => api.assignments.create(nextTid, c.id, [s.id]))
+                            }}
+                            className={`arabic w-full text-[11px] rounded-lg px-1.5 py-1 border transition ${
+                              cur ? 'bg-brand-light/60 border-brand/30 text-brand font-medium' : 'bg-white border-transparent hover:border-line text-ink-subtle'
+                            }`}
+                          >
+                            <option value="">—</option>
+                            {teachers.map(t => (
+                              <option key={t.id} value={t.id}>
+                                {t.full_name || t.username} ({teacherHours.get(t.id) ?? 0}/{t.max_weekly_hours ?? 25}h)
+                              </option>
+                            ))}
+                          </select>
+                        </td>
+                      )
+                    })}
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
       ) : (
         classes.map(c => {
           const rows = byClass.get(c.id) ?? []

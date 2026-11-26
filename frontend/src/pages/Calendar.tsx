@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, CalendarEvent } from '../api/client'
 import { useAuth } from '../auth'
+import AppShell from '../components/AppShell'
 
 const EVENT_COLORS: Record<string, { dot: string; card: string; ring: string }> = {
   blue:   { dot: 'bg-blue-500',   card: 'bg-blue-50 border-blue-200',     ring: 'ring-blue-400' },
@@ -32,7 +32,6 @@ const MONTH_FMT = new Intl.DateTimeFormat('ar-TN', { month: 'long', year: 'numer
 const FULL_FMT  = new Intl.DateTimeFormat('ar-TN', { weekday: 'long', day: 'numeric', month: 'long' })
 
 export default function Calendar() {
-  const navigate = useNavigate()
   const qc = useQueryClient()
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
@@ -74,25 +73,17 @@ export default function Calendar() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <header className="bg-white border-b border-gray-200 px-4 md:px-6 py-4">
-        <button onClick={() => navigate('/')}
-                className="text-sm text-gray-500 hover:text-gray-800 flex items-center gap-1 mb-3">
-          ← الرئيسية
+    <AppShell
+      title="الروزنامة"
+      subtitle={MONTH_FMT.format(days[3])}
+      actions={
+        <button onClick={() => setAddOpen(true)}
+                className="arabic bg-brand hover:bg-brand-hover text-white px-4 py-2 rounded-xl text-xs md:text-sm font-semibold shadow-sm transition">
+          + حدث جديد
         </button>
-        <div className="flex items-center justify-between" dir="rtl">
-          <div>
-            <h1 className="arabic text-xl font-bold text-gray-900">📅 الروزنامة</h1>
-            <p className="arabic text-sm text-gray-400">{MONTH_FMT.format(days[3])}</p>
-          </div>
-          <button onClick={() => setAddOpen(true)}
-                  className="arabic bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-xl text-sm font-medium transition">
-            + حدث جديد
-          </button>
-        </div>
-      </header>
-
-      <main className="max-w-3xl mx-auto px-4 md:px-6 py-6" dir="rtl">
+      }
+    >
+      <div className="max-w-3xl" dir="rtl">
         {error && (
           <div className="arabic mb-4 bg-red-50 border border-red-200 text-red-700 px-4 py-2.5 rounded-xl text-sm">{error}</div>
         )}
@@ -172,7 +163,7 @@ export default function Calendar() {
             })}
           </div>
         )}
-      </main>
+      </div>
 
       {addOpen && (
         <AddEventModal
@@ -186,7 +177,7 @@ export default function Calendar() {
           }}
         />
       )}
-    </div>
+    </AppShell>
   )
 }
 

@@ -149,6 +149,8 @@ func Migrate(conn *gorm.DB) error {
 		&CalendarEvent{},
 		&TimetableSlot{},
 		&OfficialDocument{},
+		&Room{},
+		&LevelCurriculum{},
 	}
 	for _, m := range models {
 		if err := conn.AutoMigrate(m); err != nil {
@@ -172,6 +174,9 @@ func Migrate(conn *gorm.DB) error {
 		return err
 	}
 	if err := once(conn, "seed_templates_all_v1", seedAllSubjectTemplates); err != nil {
+		return err
+	}
+	if err := once(conn, "seed_rooms_and_curriculum_v1", seedRoomsAndCurriculum); err != nil {
 		return err
 	}
 	return nil
@@ -330,6 +335,130 @@ func seedAllSubjectTemplates(tx *gorm.DB) error {
 		}
 		if err := seedTemplate(tx, spec); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func seedRoomsAndCurriculum(tx *gorm.DB) error {
+	// Seed starter rooms if none exist
+	var roomCount int64
+	tx.Model(&Room{}).Count(&roomCount)
+	if roomCount == 0 {
+		starterRooms := []Room{
+			{Name: "قاعة 1", RoomType: "standard", IsActive: true},
+			{Name: "قاعة 2", RoomType: "standard", IsActive: true},
+			{Name: "قاعة 3", RoomType: "standard", IsActive: true},
+			{Name: "قاعة 4", RoomType: "standard", IsActive: true},
+			{Name: "قاعة 5", RoomType: "standard", IsActive: true},
+			{Name: "قاعة 6", RoomType: "standard", IsActive: true},
+			{Name: "الساحة الرياضية", RoomType: "yard", IsActive: true},
+		}
+		for i := range starterRooms {
+			_ = tx.Create(&starterRooms[i]).Error
+		}
+	}
+
+	// Seed default Tunisian primary school weekly hours per (level, subject)
+	var subjects []Subject
+	if err := tx.Find(&subjects).Error; err != nil {
+		return err
+	}
+	subjByCode := map[string]string{}
+	for _, s := range subjects {
+		subjByCode[s.Code] = s.ID
+	}
+
+	type curSeed struct {
+		code   string
+		hours  float64
+		block  float64
+		weight string
+		room   string
+	}
+	byLevel := map[string][]curSeed{
+		"السنة الأولى": {
+			{"arabe", 8, 2, "heavy", "standard"},
+			{"math", 5, 1, "heavy", "standard"},
+			{"eveil", 2, 1, "heavy", "standard"},
+			{"islamique", 2, 1, "light", "standard"},
+			{"arts", 1, 1, "light", "standard"},
+			{"musique", 1, 1, "light", "standard"},
+			{"sport", 1, 1, "light", "yard"},
+		},
+		"السنة الثانية": {
+			{"arabe", 8, 2, "heavy", "standard"},
+			{"math", 5, 1, "heavy", "standard"},
+			{"eveil", 2, 1, "heavy", "standard"},
+			{"islamique", 2, 1, "light", "standard"},
+			{"arts", 1, 1, "light", "standard"},
+			{"musique", 1, 1, "light", "standard"},
+			{"sport", 1, 1, "light", "yard"},
+		},
+		"السنة الثالثة": {
+			{"arabe", 6, 2, "heavy", "standard"},
+			{"math", 5, 1, "heavy", "standard"},
+			{"francais", 5, 2, "heavy", "standard"},
+			{"eveil", 2, 1, "heavy", "standard"},
+			{"islamique", 2, 1, "light", "standard"},
+			{"arts", 1, 1, "light", "standard"},
+			{"musique", 1, 1, "light", "standard"},
+			{"sport", 1, 1, "light", "yard"},
+		},
+		"السنة الرابعة": {
+			{"arabe", 6, 2, "heavy", "standard"},
+			{"math", 5, 1, "heavy", "standard"},
+			{"francais", 5, 2, "heavy", "standard"},
+			{"anglais", 2, 1, "heavy", "standard"},
+			{"eveil", 2, 1, "heavy", "standard"},
+			{"islamique", 1, 1, "light", "standard"},
+			{"civique", 1, 1, "light", "standard"},
+			{"sport", 1, 1, "light", "yard"},
+		},
+		"السنة الخامسة": {
+			{"arabe", 5, 2, "heavy", "standard"},
+			{"math", 5, 1, "heavy", "standard"},
+			{"francais", 5, 2, "heavy", "standard"},
+			{"anglais", 2, 1, "heavy", "standard"},
+			{"eveil", 2, 1, "heavy", "standard"},
+			{"histoire", 1, 1, "light", "standard"},
+			{"geographie", 1, 1, "light", "standard"},
+			{"islamique", 1, 1, "light", "standard"},
+			{"civique", 1, 1, "light", "standard"},
+			{"sport", 1, 1, "light", "yard"},
+		},
+		"السنة السادسة": {
+			{"arabe", 5, 2, "heavy", "standard"},
+			{"math", 5, 1, "heavy", "standard"},
+			{"francais", 5, 2, "heavy", "standard"},
+			{"anglais", 2, 1, "heavy", "standard"},
+			{"eveil", 2, 1, "heavy", "standard"},
+			{"histoire", 1, 1, "light", "standard"},
+			{"geographie", 1, 1, "light", "standard"},
+			{"islamique", 1, 1, "light", "standard"},
+			{"civique", 1, 1, "light", "standard"},
+			{"sport", 1, 1, "light", "yard"},
+		},
+	}
+
+	for level, items := range byLevel {
+		for _, it := range items {
+			sid, ok := subjByCode[it.code]
+			if !ok {
+				continue
+			}
+			var existing LevelCurriculum
+			if err := tx.Where("level = ? AND subject_id = ?", level, sid).First(&existing).Error; err == nil {
+				continue
+			}
+			_ = tx.Create(&LevelCurriculum{
+				Level:           level,
+				SubjectID:       sid,
+				WeeklyHours:     it.hours,
+				BlockSize:       it.block,
+				CognitiveWeight: it.weight,
+				RoomType:        it.room,
+			}).Error
 		}
 	}
 	return nil

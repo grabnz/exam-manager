@@ -35,6 +35,7 @@ func New() (http.Handler, error) {
 	calendarH := &handlers.CalendarHandler{DB: conn}
 	docsH := &handlers.DocumentsHandler{DB: conn}
 	timetableH := &handlers.TimetableHandler{DB: conn}
+	schedH := &handlers.SchedulingHandler{DB: conn}
 	classesH := &handlers.ClassesHandler{DB: conn}
 	sessionsH := &handlers.SessionsHandler{DB: conn}
 	scoresH := &handlers.ScoresHandler{DB: conn}
@@ -101,10 +102,18 @@ func New() (http.Handler, error) {
 	mux.HandleFunc("GET /api/documents/{doc_id}/download", requireUser(docsH.Download))
 	mux.HandleFunc("DELETE /api/documents/{doc_id}", requireAdmin(docsH.Delete))
 
-	// Timetable
+	// Timetable, Rooms, Curriculum & Auto-Scheduler
 	mux.HandleFunc("GET /api/timetable", requireUser(timetableH.List))
 	mux.HandleFunc("POST /api/timetable", requireAdmin(timetableH.Create))
+	mux.HandleFunc("PATCH /api/timetable/{slot_id}/pin", requireAdmin(schedH.TogglePin))
 	mux.HandleFunc("DELETE /api/timetable/{slot_id}", requireAdmin(timetableH.Delete))
+	mux.HandleFunc("POST /api/timetable/generate", requireAdmin(schedH.Generate))
+	mux.HandleFunc("POST /api/timetable/commit", requireAdmin(schedH.Commit))
+	mux.HandleFunc("GET /api/rooms", requireUser(schedH.ListRooms))
+	mux.HandleFunc("POST /api/rooms", requireAdmin(schedH.CreateRoom))
+	mux.HandleFunc("DELETE /api/rooms/{room_id}", requireAdmin(schedH.DeleteRoom))
+	mux.HandleFunc("GET /api/curriculum", requireUser(schedH.ListCurriculum))
+	mux.HandleFunc("PUT /api/curriculum", requireAdmin(schedH.UpsertCurriculum))
 
 	// Classes & students
 	mux.HandleFunc("POST /api/classes/parse-pdf", requireAdmin(classesH.ParsePDFPreview))

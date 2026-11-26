@@ -89,6 +89,7 @@ type User struct {
 	Grade              string              `gorm:"default:''"`
 	Subject            string              `gorm:"default:''"`
 	Role               string              `gorm:"not null;default:'teacher'"`
+	MaxWeeklyHours     float64             `gorm:"not null;default:25"`
 	IsActive           bool                `gorm:"not null;default:true"`
 	MustChangePassword bool                `gorm:"not null;default:true"`
 	CreatedAt          time.Time           `gorm:"autoCreateTime"`
@@ -262,10 +263,46 @@ type TimetableSlot struct {
 	End       string    `gorm:"not null"`
 	Room      string    `gorm:"default:''"`
 	Label     string    `gorm:"default:''"`
+	IsPinned  bool      `gorm:"not null;default:false"`
 	CreatedAt time.Time `gorm:"autoCreateTime"`
 	Teacher   *User     `gorm:"foreignKey:TeacherID"`
 	Class     *Class    `gorm:"foreignKey:ClassID"`
 	Subject   *Subject  `gorm:"foreignKey:SubjectID"`
+}
+
+type Room struct {
+	ID        string    `gorm:"primaryKey;type:text"`
+	Name      string    `gorm:"not null;uniqueIndex"`
+	RoomType  string    `gorm:"not null;default:'standard'"` // standard | computer | yard | multipurpose
+	IsActive  bool      `gorm:"not null;default:true"`
+	CreatedAt time.Time `gorm:"autoCreateTime"`
+}
+
+func (r *Room) BeforeCreate(_ *gorm.DB) error {
+	if r.ID == "" {
+		r.ID = newID()
+	}
+	return nil
+}
+
+type LevelCurriculum struct {
+	ID              string   `gorm:"primaryKey;type:text"`
+	Level           string   `gorm:"not null;uniqueIndex:ux_curriculum_level_subj"`
+	SubjectID       string   `gorm:"not null;uniqueIndex:ux_curriculum_level_subj"`
+	WeeklyHours     float64  `gorm:"not null;default:2"`
+	BlockSize       float64  `gorm:"not null;default:1"` // preferred session duration (1 or 2)
+	CognitiveWeight string   `gorm:"not null;default:'heavy'"` // heavy | light
+	RoomType        string   `gorm:"not null;default:'standard'"`
+	Subject         *Subject `gorm:"foreignKey:SubjectID"`
+}
+
+func (LevelCurriculum) TableName() string { return "level_curricula" }
+
+func (lc *LevelCurriculum) BeforeCreate(_ *gorm.DB) error {
+	if lc.ID == "" {
+		lc.ID = newID()
+	}
+	return nil
 }
 
 func (s *TimetableSlot) BeforeCreate(_ *gorm.DB) error {

@@ -314,6 +314,32 @@ func TestEndToEndAPIParity(t *testing.T) {
 		t.Fatalf("expected 409 overlap, got %d", rec.Code)
 	}
 
+	// 12b. Rooms, Curriculum, max_weekly_hours & Fair Auto-Scheduler (#18, #20)
+	if rec = doReq(t, h, "GET", "/api/rooms", tok, nil); rec.Code != 200 {
+		t.Fatalf("rooms list: got %d", rec.Code)
+	}
+	if rec = doReq(t, h, "GET", "/api/curriculum", tok, nil); rec.Code != 200 {
+		t.Fatalf("curriculum list: got %d", rec.Code)
+	}
+	if rec = doReq(t, h, "PATCH", "/api/users/"+teacher.ID, tok, map[string]any{"max_weekly_hours": 18}); rec.Code != 200 {
+		t.Fatalf("update max_weekly_hours: got %d: %s", rec.Code, rec.Body.String())
+	}
+	rec = doReq(t, h, "POST", "/api/timetable/generate", tok, map[string]any{})
+	if rec.Code != 200 {
+		t.Fatalf("timetable generate: got %d: %s", rec.Code, rec.Body.String())
+	}
+	var genRes struct {
+		Slots        []map[string]any `json:"slots"`
+		QualityScore int              `json:"quality_score"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &genRes)
+	if len(genRes.Slots) == 0 {
+		t.Fatalf("expected generated slots, got 0")
+	}
+	if rec = doReq(t, h, "POST", "/api/timetable/commit", tok, map[string]any{"slots": genRes.Slots}); rec.Code != 200 {
+		t.Fatalf("timetable commit: got %d: %s", rec.Code, rec.Body.String())
+	}
+
 	// 13. Consecutive auto-saves with base_updated_at must NOT false-409
 	rec = doReq(t, h, "PUT", "/api/sessions/"+sess.ID+"/scores", tok, map[string]any{
 		"scores": []map[string]any{{"student_id": student.ID, "criteria": map[string]float64{critID: 12}, "sections": map[string]any{}}},
