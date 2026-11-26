@@ -219,7 +219,7 @@ type ScoreEntry struct {
 	StudentID  string       `gorm:"not null;uniqueIndex:ux_score_session_student"`
 	Values     ScoreValues  `gorm:"type:json;not null"`
 	FinalScore *float64     `gorm:"type:double precision"`
-	UpdatedAt  *time.Time   `gorm:"autoUpdateTime"`
+	UpdatedAt  *time.Time
 	UpdatedBy  *string      `gorm:"type:text"`
 	Session    *ExamSession `gorm:"foreignKey:SessionID"`
 	Student    *Student     `gorm:"foreignKey:StudentID"`

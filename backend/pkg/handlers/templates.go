@@ -123,11 +123,17 @@ func applyTemplateSpec(tx *gorm.DB, tpl *db.GridTemplate, body templateUpdateBod
 
 	// Delete existing sections (and their criteria)
 	var oldSecs []db.GridSection
-	tx.Where("template_id = ?", tpl.ID).Find(&oldSecs)
-	for _, os := range oldSecs {
-		tx.Where("section_id = ?", os.ID).Delete(&db.GridCriterion{})
+	if err := tx.Where("template_id = ?", tpl.ID).Find(&oldSecs).Error; err != nil {
+		return http.StatusInternalServerError, err.Error()
 	}
-	tx.Where("template_id = ?", tpl.ID).Delete(&db.GridSection{})
+	for _, os := range oldSecs {
+		if err := tx.Where("section_id = ?", os.ID).Delete(&db.GridCriterion{}).Error; err != nil {
+			return http.StatusInternalServerError, err.Error()
+		}
+	}
+	if err := tx.Where("template_id = ?", tpl.ID).Delete(&db.GridSection{}).Error; err != nil {
+		return http.StatusInternalServerError, err.Error()
+	}
 
 	groupKeys := map[string]string{}
 	for si, s := range body.Sections {
@@ -368,11 +374,17 @@ func (h *TemplatesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 	err := h.DB.Transaction(func(tx *gorm.DB) error {
 		var secs []db.GridSection
-		tx.Where("template_id = ?", tpl.ID).Find(&secs)
-		for _, s := range secs {
-			tx.Where("section_id = ?", s.ID).Delete(&db.GridCriterion{})
+		if err := tx.Where("template_id = ?", tpl.ID).Find(&secs).Error; err != nil {
+			return err
 		}
-		tx.Where("template_id = ?", tpl.ID).Delete(&db.GridSection{})
+		for _, s := range secs {
+			if err := tx.Where("section_id = ?", s.ID).Delete(&db.GridCriterion{}).Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Where("template_id = ?", tpl.ID).Delete(&db.GridSection{}).Error; err != nil {
+			return err
+		}
 		return tx.Delete(&tpl).Error
 	})
 	if err != nil {

@@ -34,6 +34,9 @@ func parseFlexTime(raw string) (time.Time, error) {
 }
 
 func rowsPayload(s *db.ExamSession) []map[string]any {
+	if s.Class == nil {
+		return []map[string]any{}
+	}
 	byStudent := make(map[string]db.ScoreEntry, len(s.Entries))
 	for _, e := range s.Entries {
 		byStudent[e.StudentID] = e
@@ -117,7 +120,7 @@ func (h *ScoresHandler) Save(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Offline-sync conflict detection
+	// Offline-sync conflict detection (1s tolerance absorbs Postgres microsecond rounding)
 	if body.BaseUpdatedAt != nil && *body.BaseUpdatedAt != "" && !body.Force {
 		if base, err := parseFlexTime(*body.BaseUpdatedAt); err == nil {
 			var latest *time.Time
@@ -127,7 +130,7 @@ func (h *ScoresHandler) Save(w http.ResponseWriter, r *http.Request) {
 					latest = &t
 				}
 			}
-			if latest != nil && latest.After(base) {
+			if latest != nil && latest.Sub(base) > time.Second {
 				httpx.WriteJSON(w, http.StatusConflict, map[string]any{
 					"detail":      "تم تعديل الأعداد من جهاز آخر بعد آخر مزامنة",
 					"server_rows": rowsPayload(s),
@@ -154,7 +157,7 @@ func (h *ScoresHandler) Save(w http.ResponseWriter, r *http.Request) {
 		existingEntries[e.StudentID] = e
 	}
 
-	now := time.Now().UTC()
+	now := time.Now().UTC().Truncate(time.Millisecond)
 	editorID := u.ID
 	err := h.DB.Transaction(func(tx *gorm.DB) error {
 		for _, item := range body.Scores {
@@ -227,7 +230,11 @@ func (h *ScoresHandler) ExportExcel(w http.ResponseWriter, r *http.Request) {
 		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	safeName := url.PathEscape(fmt.Sprintf("%s_T%d.xlsx", s.Class.Name, s.Trimester))
+	className := "scores"
+	if s.Class != nil && s.Class.Name != "" {
+		className = s.Class.Name
+	}
+	safeName := url.PathEscape(fmt.Sprintf("%s_T%d.xlsx", className, s.Trimester))
 	w.Header().Set("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="scores.xlsx"; filename*=UTF-8''%s`, safeName))
 	w.WriteHeader(http.StatusOK)

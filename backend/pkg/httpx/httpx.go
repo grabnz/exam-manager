@@ -2,10 +2,25 @@ package httpx
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"strings"
 )
+
+// Recover catches panics in handlers and returns a JSON 500 instead of dropping the connection.
+func Recover(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				log.Printf("[panic] %s %s: %v\n%s", r.Method, r.URL.Path, rec, debug.Stack())
+				WriteError(w, http.StatusInternalServerError, "Internal server error")
+			}
+		}()
+		next.ServeHTTP(w, r)
+	})
+}
 
 // WriteJSON encodes v as JSON with the given HTTP status code.
 func WriteJSON(w http.ResponseWriter, status int, v any) {

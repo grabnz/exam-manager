@@ -103,12 +103,12 @@ func (h *DocumentsHandler) Upload(w http.ResponseWriter, r *http.Request) {
 		Size:        len(content),
 		Data:        content,
 		UploadedBy:  &uploaderID,
-		Uploader:    admin,
 	}
 	if err := h.DB.Create(&doc).Error; err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	doc.Uploader = admin
 	httpx.WriteJSON(w, http.StatusOK, docOut(&doc))
 }
 

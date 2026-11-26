@@ -106,20 +106,25 @@ func (h *CalendarHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if !eventColors[color] {
 		color = "blue"
 	}
+	var timePtr *string
+	if body.Time != nil && strings.TrimSpace(*body.Time) != "" {
+		t := strings.TrimSpace(*body.Time)
+		timePtr = &t
+	}
 	e := db.CalendarEvent{
 		UserID:       u.ID,
 		Title:        strings.TrimSpace(body.Title),
 		Date:         body.Date,
-		Time:         body.Time,
+		Time:         timePtr,
 		Note:         strings.TrimSpace(body.Note),
 		Color:        color,
 		IsSchoolWide: body.IsSchoolWide,
-		User:         u,
 	}
 	if err := h.DB.Create(&e).Error; err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	e.User = u
 	httpx.WriteJSON(w, http.StatusOK, eventOut(&e, u.ID))
 }
 

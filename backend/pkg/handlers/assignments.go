@@ -102,14 +102,14 @@ func (h *AssignmentsHandler) Create(w http.ResponseWriter, r *http.Request) {
 			TeacherID: body.TeacherID,
 			ClassID:   body.ClassID,
 			SubjectID: subjectID,
-			Teacher:   &teacher,
-			Class:     &cls,
-			Subject:   &subj,
 		}
 		if err := h.DB.Create(&a).Error; err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
+		a.Teacher = &teacher
+		a.Class = &cls
+		a.Subject = &subj
 		created = append(created, assignmentOut(&a))
 	}
 	if created == nil {

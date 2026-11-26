@@ -165,14 +165,14 @@ func (h *TimetableHandler) Create(w http.ResponseWriter, r *http.Request) {
 		End:       body.End,
 		Room:      room,
 		Label:     strings.TrimSpace(body.Label),
-		Teacher:   &teacher,
-		Class:     cls,
-		Subject:   subj,
 	}
 	if err := h.DB.Create(&slot).Error; err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	slot.Teacher = &teacher
+	slot.Class = cls
+	slot.Subject = subj
 	httpx.WriteJSON(w, http.StatusOK, slotOut(&slot))
 }
 

@@ -313,4 +313,96 @@ func TestEndToEndAPIParity(t *testing.T) {
 	if rec.Code != 409 {
 		t.Fatalf("expected 409 overlap, got %d", rec.Code)
 	}
+
+	// 13. Consecutive auto-saves with base_updated_at must NOT false-409
+	rec = doReq(t, h, "PUT", "/api/sessions/"+sess.ID+"/scores", tok, map[string]any{
+		"scores": []map[string]any{{"student_id": student.ID, "criteria": map[string]float64{critID: 12}, "sections": map[string]any{}}},
+	})
+	if rec.Code != 200 {
+		t.Fatalf("save 1: got %d: %s", rec.Code, rec.Body.String())
+	}
+	var save1 struct{ SavedAt string `json:"saved_at"` }
+	_ = json.Unmarshal(rec.Body.Bytes(), &save1)
+	rec = doReq(t, h, "PUT", "/api/sessions/"+sess.ID+"/scores", tok, map[string]any{
+		"scores":          []map[string]any{{"student_id": student.ID, "criteria": map[string]float64{critID: 14}, "sections": map[string]any{}}},
+		"base_updated_at": save1.SavedAt,
+	})
+	if rec.Code != 200 {
+		t.Fatalf("consecutive auto-save should succeed (no false 409), got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 14. Template clone -> update -> delete
+	rec = doReq(t, h, "POST", "/api/templates/"+sessInfo.TemplateID+"/clone", tok, nil)
+	if rec.Code != 200 {
+		t.Fatalf("template clone: got %d: %s", rec.Code, rec.Body.String())
+	}
+	var clonedTpl struct{ ID string `json:"id"` }
+	_ = json.Unmarshal(rec.Body.Bytes(), &clonedTpl)
+	rec = doReq(t, h, "PUT", "/api/templates/"+clonedTpl.ID, tok, map[string]any{
+		"name": "Custom Grid", "final_formula": "sum_sections", "direction": "rtl",
+		"sections": []map[string]any{{
+			"group_label": "المجال", "label": "القسم",
+			"criteria": []map[string]any{{"label": "مع1", "max_score": 5}},
+		}},
+	})
+	if rec.Code != 200 {
+		t.Fatalf("template update: got %d: %s", rec.Code, rec.Body.String())
+	}
+	rec = doReq(t, h, "DELETE", "/api/templates/"+clonedTpl.ID, tok, nil)
+	if rec.Code != 200 {
+		t.Fatalf("template delete: got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// 15. Calendar (with empty time ""), Settings, Profile
+	rec = doReq(t, h, "POST", "/api/events", tok, map[string]any{
+		"title": "مجلس القسم", "date": "2026-11-28", "time": "", "is_school_wide": true,
+	})
+	if rec.Code != 200 {
+		t.Fatalf("calendar create: got %d: %s", rec.Code, rec.Body.String())
+	}
+	var ev struct{ ID string `json:"id"` }
+	_ = json.Unmarshal(rec.Body.Bytes(), &ev)
+	if rec = doReq(t, h, "GET", "/api/events?start=2026-11-01&end=2026-11-30", tok, nil); rec.Code != 200 {
+		t.Fatalf("calendar list: got %d", rec.Code)
+	}
+	if rec = doReq(t, h, "DELETE", "/api/events/"+ev.ID, tok, nil); rec.Code != 200 {
+		t.Fatalf("calendar delete: got %d", rec.Code)
+	}
+	if rec = doReq(t, h, "PUT", "/api/settings", tok, map[string]string{"school_name": "المدرسة الابتدائية", "active_year": "2025-2026", "region": "تونس"}); rec.Code != 200 {
+		t.Fatalf("settings put: got %d", rec.Code)
+	}
+	if rec = doReq(t, h, "PUT", "/api/profile", tok, map[string]string{"name": "المدير", "grade": "مدير", "subject": ""}); rec.Code != 200 {
+		t.Fatalf("profile put: got %d", rec.Code)
+	}
+
+	// 16. Teacher authorization boundaries
+	rec = doReq(t, h, "POST", "/api/auth/login", "", map[string]string{"username": "salma.m", "password": "password123"})
+	if rec.Code != 200 {
+		t.Fatalf("teacher login: got %d", rec.Code)
+	}
+	var tLogin struct{ Token string `json:"token"` }
+	_ = json.Unmarshal(rec.Body.Bytes(), &tLogin)
+	if rec = doReq(t, h, "GET", "/api/users", tLogin.Token, nil); rec.Code != 403 {
+		t.Fatalf("teacher should get 403 on /api/users, got %d", rec.Code)
+	}
+	if rec = doReq(t, h, "GET", "/api/classes/"+cloned.ID, tLogin.Token, nil); rec.Code != 404 {
+		t.Fatalf("teacher should get 404 on unassigned class, got %d", rec.Code)
+	}
+	if rec = doReq(t, h, "GET", "/api/stats", tLogin.Token, nil); rec.Code != 200 {
+		t.Fatalf("teacher stats: got %d", rec.Code)
+	}
+
+	// 17. Clean deletes (session -> student -> class -> user)
+	if rec = doReq(t, h, "DELETE", "/api/sessions/"+sess.ID, tok, nil); rec.Code != 200 {
+		t.Fatalf("delete session: got %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec = doReq(t, h, "DELETE", "/api/students/"+student.ID, tok, nil); rec.Code != 200 {
+		t.Fatalf("delete student: got %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec = doReq(t, h, "DELETE", "/api/classes/"+cls.ID, tok, nil); rec.Code != 200 {
+		t.Fatalf("delete class: got %d: %s", rec.Code, rec.Body.String())
+	}
+	if rec = doReq(t, h, "DELETE", "/api/users/"+teacher.ID, tok, nil); rec.Code != 200 {
+		t.Fatalf("delete user: got %d: %s", rec.Code, rec.Body.String())
+	}
 }

@@ -138,5 +138,5 @@ func New() (http.Handler, error) {
 	mux.HandleFunc("GET /api/profile", requireUser(profileH.Get))
 	mux.HandleFunc("PUT /api/profile", requireUser(profileH.Update))
 
-	return httpx.CORS(mux), nil
+	return httpx.CORS(httpx.Recover(mux)), nil
 }
