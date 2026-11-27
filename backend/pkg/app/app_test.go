@@ -1,8 +1,10 @@
 package app_test
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/json"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -533,4 +535,109 @@ func TestFrenchExamStudioAndBank(t *testing.T) {
 	if len(saved) != 1 {
 		t.Fatalf("expected 1 saved illustration, got %d", len(saved))
 	}
+
+	// 5. Upload a .docx old exam with embedded illustration (archive_and_bank + bank_only)
+	docxBytes := buildTestDOCX(t)
+	upload := func(mode string) *httptest.ResponseRecorder {
+		var body bytes.Buffer
+		mw := multipart.NewWriter(&body)
+		fw, _ := mw.CreateFormFile("file", "examen-2024.docx")
+		_, _ = fw.Write(docxBytes)
+		_ = mw.WriteField("school_year", "2023-2024")
+		_ = mw.WriteField("level", "4ème année")
+		_ = mw.WriteField("trimester", "1")
+		_ = mw.WriteField("mode", mode)
+		_ = mw.Close()
+		req := httptest.NewRequest("POST", "/api/exams/upload-legacy", &body)
+		req.Header.Set("Content-Type", mw.FormDataContentType())
+		req.Header.Set("Authorization", "Bearer "+tok)
+		rr := httptest.NewRecorder()
+		h.ServeHTTP(rr, req)
+		return rr
+	}
+
+	rec = upload("archive_and_bank")
+	if rec.Code != 201 {
+		t.Fatalf("upload docx archive_and_bank: got %d: %s", rec.Code, rec.Body.String())
+	}
+	var upRes struct {
+		ID                   string           `json:"id"`
+		ExtractedImagesCount int              `json:"extracted_images_count"`
+		Blocks               []map[string]any `json:"blocks"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &upRes)
+	if len(upRes.Blocks) < 3 {
+		t.Fatalf("expected >= 3 extracted blocks from docx, got %d", len(upRes.Blocks))
+	}
+	if upRes.ExtractedImagesCount != 1 {
+		t.Fatalf("expected 1 extracted image from docx, got %d", upRes.ExtractedImagesCount)
+	}
+	hasAttachedImg := false
+	for _, b := range upRes.Blocks {
+		if c, ok := b["content"].(map[string]any); ok {
+			if u, ok := c["image_url"].(string); ok && len(u) > 20 {
+				hasAttachedImg = true
+			}
+			if ps, ok := c["panels"].([]any); ok && len(ps) > 0 {
+				hasAttachedImg = true
+			}
+		}
+	}
+	if !hasAttachedImg {
+		t.Fatalf("expected extracted docx image to be attached to an exercise block")
+	}
+
+	// Verify bank_only mode succeeds without creating an archive paper
+	rec = upload("bank_only")
+	if rec.Code != 201 {
+		t.Fatalf("upload docx bank_only: got %d: %s", rec.Code, rec.Body.String())
+	}
+	var bankOnlyRes struct {
+		Mode                 string `json:"mode"`
+		ExtractedBlocksCount int    `json:"extracted_blocks_count"`
+		ExtractedImagesCount int    `json:"extracted_images_count"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &bankOnlyRes)
+	if bankOnlyRes.Mode != "bank_only" || bankOnlyRes.ExtractedBlocksCount < 3 || bankOnlyRes.ExtractedImagesCount != 1 {
+		t.Fatalf("unexpected bank_only response: %+v", bankOnlyRes)
+	}
+}
+
+func buildTestDOCX(t *testing.T) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	zw := zip.NewWriter(&buf)
+
+	addFile := func(name string, data []byte) {
+		w, err := zw.Create(name)
+		if err != nil {
+			t.Fatalf("zip create %s: %v", name, err)
+		}
+		_, _ = w.Write(data)
+	}
+
+	// Minimal valid 70-byte PNG payload
+	fakePNG := append([]byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}, bytes.Repeat([]byte{0x42}, 80)...)
+	addFile("word/media/image1.png", fakePNG)
+	addFile("word/_rels/document.xml.rels", []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/>
+</Relationships>`))
+	addFile("word/document.xml", []byte(`<?xml version="1.0" encoding="UTF-8"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <w:body>
+    <w:p><w:r><w:t>Le petit chat de Lina</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Chaque matin, Lina donne du lait frais à son petit chat blanc dans le jardin ensoleillé de la maison familiale. Tous les voisins aiment voir le chaton jouer avec la pelote de laine bleue.</w:t></w:r><w:r><w:drawing><a:blip r:embed="rId1"/></w:drawing></w:r></w:p>
+    <w:p><w:r><w:t>1) J'écris Vrai ou Faux devant chaque phrase :</w:t></w:r></w:p>
+    <w:p><w:r><w:t>- Lina donne du lait au chat.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>- Le chat est noir.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>II. Langue</w:t></w:r></w:p>
+    <w:p><w:r><w:t>2) Je complète par a ou à :</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Lina ... un chaton ... la maison.</w:t></w:r></w:p>
+    <w:p><w:r><w:t>III. Production écrite</w:t></w:r></w:p>
+    <w:p><w:r><w:t>Raconte en 4 phrases comment tu prends soin de ton animal préféré.</w:t></w:r></w:p>
+  </w:body>
+</w:document>`))
+	_ = zw.Close()
+	return buf.Bytes()
 }

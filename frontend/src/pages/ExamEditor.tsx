@@ -8,9 +8,21 @@ import {
 import { useUI } from '../components/ui'
 import {
   ArrowRightIcon, CheckIcon, PlusIcon, PrinterIcon, SparklesIcon,
-  TrashIcon, ImageIcon, SearchIcon, RefreshCwIcon, XIcon, BookOpenIcon, UploadIcon,
+  TrashIcon, ImageIcon, SearchIcon, RefreshCwIcon, XIcon, BookOpenIcon, UploadIcon, FileIcon,
 } from '../components/icons'
 import { getModuleInfo, getModulesForLevel } from '../lib/tunisianFrenchProgram'
+
+function getBlockThumbs(content?: Record<string, any>): string[] {
+  if (!content) return []
+  const urls: string[] = []
+  if (typeof content.image_url === 'string' && content.image_url) urls.push(content.image_url)
+  if (Array.isArray(content.panels)) {
+    for (const p of content.panels) {
+      if (typeof p === 'string' && p && !urls.includes(p)) urls.push(p)
+    }
+  }
+  return urls
+}
 
 const BLOCK_CATALOG: { type: ExamBlockType; section: 'lecture' | 'langue' | 'production'; label: string; crit: string; pts: number }[] = [
   { type: 'section_header',        section: 'lecture',    label: 'Titre de section',         crit: '',   pts: 0 },
@@ -115,11 +127,18 @@ export default function ExamEditor() {
   const [saving, setSaving] = useState(false)
   const [savedFlag, setSavedFlag] = useState(false)
 
-  // Right helper drawer: ML Suggestions vs Illustration Search
-  const [drawerTab, setDrawerTab] = useState<'suggest' | 'illustrations'>('suggest')
+  // Right helper drawer: ML Suggestions vs Pick from Old Exams vs Illustration Search
+  const [drawerTab, setDrawerTab] = useState<'suggest' | 'archive' | 'illustrations'>('suggest')
   const [suggestSec, setSuggestSec] = useState<string>('')
   const [suggestions, setSuggestions] = useState<ScoredSuggestion[]>([])
   const [loadingSuggest, setLoadingSuggest] = useState(false)
+
+  // Old Exams Picker state
+  const [archiveList, setArchiveList] = useState<ExamPaper[]>([])
+  const [archiveSearch, setArchiveSearch] = useState('')
+  const [expandedExamId, setExpandedExamId] = useState<string | null>(null)
+  const [archiveDetails, setArchiveDetails] = useState<Record<string, ExamPaper>>({})
+  const [loadingArchiveId, setLoadingArchiveId] = useState<string | null>(null)
 
   const [imgQuery, setImgQuery] = useState('')
   const [imgBW, setImgBW] = useState(false)
@@ -189,6 +208,56 @@ export default function ExamEditor() {
     }
   }
 
+  const loadArchiveList = async () => {
+    try {
+      const res = await api.exams.list()
+      setArchiveList(Array.isArray(res) ? res.filter(e => e.id !== id) : [])
+    } catch {
+      setArchiveList([])
+    }
+  }
+
+  const toggleArchiveExam = async (examId: string) => {
+    if (expandedExamId === examId) {
+      setExpandedExamId(null)
+      return
+    }
+    setExpandedExamId(examId)
+    if (!archiveDetails[examId]) {
+      setLoadingArchiveId(examId)
+      try {
+        const full = await api.exams.get(examId)
+        setArchiveDetails(prev => ({ ...prev, [examId]: full }))
+      } finally {
+        setLoadingArchiveId(null)
+      }
+    }
+  }
+
+  const saveSingleBlockToBank = async (b: ExamBlock) => {
+    try {
+      let pts = Number(b.points) || 0
+      if (b.type === 'reading_comprehension' && Array.isArray(b.content?.questions)) {
+        pts = b.content.questions.reduce((s: number, q: any) => s + (Number(q.points) || 0), 0)
+      }
+      await api.questionBank.create({
+        section: b.section,
+        block_type: b.type,
+        level,
+        trimester,
+        module_num: moduleNum,
+        criterion: b.criterion || 'C1',
+        points: pts,
+        topic: b.topic || b.content?.title || b.content?.prompt?.slice(0, 48) || b.type,
+        content: b.content,
+      })
+      await qc.invalidateQueries({ queryKey: ['question-bank'] })
+      ui.toast('تم حفظ هذا التمرين (برسومه) في بنك التمارين الشخصي', 'success')
+    } catch (err: any) {
+      ui.toast(err.message || 'تعذّر حفظ التمرين في البنك', 'error')
+    }
+  }
+
   const generateLofiImage = async (promptText: string) => {
     const clean = promptText.trim()
     if (!clean) {
@@ -211,6 +280,7 @@ export default function ExamEditor() {
     if (paper) {
       void searchImages('', false)
       void loadSavedImgs()
+      void loadArchiveList()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paper?.id])
@@ -314,13 +384,14 @@ export default function ExamEditor() {
   }
 
   function insertIllustration(url: string) {
-    // Insert into active target block, or first reading_comprehension / reading_text / production_ecrite block
+    // Insert into active target block (ANY block type!), or fallback to first reading/production block
     const target = blocks.find(b => b.id === activeImageTarget)
       ?? blocks.find(b => b.type === 'reading_comprehension')
       ?? blocks.find(b => b.type === 'production_ecrite')
       ?? blocks.find(b => b.type === 'reading_text')
+      ?? blocks.find(b => b.type !== 'section_header')
     if (!target) {
-      ui.toast('أضيفوا أولاً «Texte + Questions» أو «Production Écrite» لإدراج الرسم', 'info')
+      ui.toast('أضيفوا تمريناً أولاً لإدراج الرسم التوضيحي', 'info')
       return
     }
     if (target.type === 'production_ecrite') {
@@ -331,7 +402,7 @@ export default function ExamEditor() {
       ui.toast('تمت إضافة الرسم إلى قصة Production Écrite', 'success')
     } else {
       updateContent(target.id, { image_url: url })
-      ui.toast('تم إدراج الرسم التوضيحي في النص', 'success')
+      ui.toast('تم إدراج الرسم التوضيحي في التمرين', 'success')
     }
   }
 
@@ -504,6 +575,7 @@ export default function ExamEditor() {
                   isImgTarget={activeImageTarget === b.id}
                   onSelectImgTarget={() => { setActiveImageTarget(b.id); setDrawerTab('illustrations') }}
                   onPreviewImage={(url, label) => setPreviewImg({ id: `blk-${b.id}`, title: label, url, source: 'builtin_svg', print_score: 99, reasons: [] })}
+                  onSaveToBank={() => void saveSingleBlockToBank(b)}
                   onUpdate={patch => updateBlock(b.id, patch)}
                   onUpdateContent={patch => updateContent(b.id, patch)}
                   onMove={dir => {
@@ -520,24 +592,32 @@ export default function ExamEditor() {
           )}
         </div>
 
-        {/* Side Column (4 cols): ML Scored Suggestions + Print-Ready Illustrations */}
+        {/* Side Column (4 cols): ML Scored Suggestions + Old Exams Picker + Print-Ready Illustrations */}
         <aside className="lg:col-span-4 bg-surface border border-line rounded-3xl p-4 shadow-card sticky top-20 space-y-4">
-          <div className="grid grid-cols-2 gap-1 bg-canvas p-1 rounded-xl">
+          <div className="grid grid-cols-3 gap-1 bg-canvas p-1 rounded-xl">
             <button
               onClick={() => setDrawerTab('suggest')}
-              className={`arabic inline-flex items-center justify-center gap-1.5 text-xs py-2 rounded-lg font-semibold transition ${
+              className={`arabic inline-flex items-center justify-center gap-1 text-[11px] py-2 rounded-lg font-semibold transition ${
                 drawerTab === 'suggest' ? 'bg-brand text-white shadow-sm' : 'text-ink-muted hover:text-ink'
               }`}
             >
-              <SparklesIcon className="w-3.5 h-3.5" /> اقتراحات ذكية
+              <SparklesIcon className="w-3.5 h-3.5" /> اقتراحات
+            </button>
+            <button
+              onClick={() => { setDrawerTab('archive'); void loadArchiveList() }}
+              className={`arabic inline-flex items-center justify-center gap-1 text-[11px] py-2 rounded-lg font-semibold transition ${
+                drawerTab === 'archive' ? 'bg-brand text-white shadow-sm' : 'text-ink-muted hover:text-ink'
+              }`}
+            >
+              <FileIcon className="w-3.5 h-3.5" /> من امتحاناتي
             </button>
             <button
               onClick={() => setDrawerTab('illustrations')}
-              className={`arabic inline-flex items-center justify-center gap-1.5 text-xs py-2 rounded-lg font-semibold transition ${
+              className={`arabic inline-flex items-center justify-center gap-1 text-[11px] py-2 rounded-lg font-semibold transition ${
                 drawerTab === 'illustrations' ? 'bg-brand text-white shadow-sm' : 'text-ink-muted hover:text-ink'
               }`}
             >
-              <ImageIcon className="w-3.5 h-3.5" /> رسوم للطباعة
+              <ImageIcon className="w-3.5 h-3.5" /> رسوم
             </button>
           </div>
 
@@ -564,62 +644,192 @@ export default function ExamEditor() {
               </div>
 
               <div className="space-y-2.5 max-h-[62vh] overflow-y-auto pl-1">
-                {suggestions.map(s => (
-                  <div key={s.block.id} className="bg-canvas/70 border border-line rounded-2xl p-3 space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full num" dir="ltr">
-                        {s.fit_score}% fit
-                      </span>
-                      <span className="text-[11px] text-ink-muted font-semibold num" dir="ltr">
-                        {s.block.criterion} · {s.block.points}pt
-                      </span>
-                    </div>
-                    <p className="text-xs font-semibold text-ink line-clamp-2" dir="ltr">
-                      {s.block.content?.prompt || s.block.content?.title || s.block.topic}
-                    </p>
-                    <div className="flex flex-wrap gap-1">
-                      {(s.reasons ?? []).map((r, ri) => (
-                        <span key={ri} className="arabic text-[10px] bg-surface border border-line text-ink-muted px-2 py-0.5 rounded-full">
-                          {r}
+                {suggestions.map(s => {
+                  const thumbs = getBlockThumbs(s.block.content)
+                  return (
+                    <div key={s.block.id} className="bg-canvas/70 border border-line rounded-2xl p-3 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full num" dir="ltr">
+                          {s.fit_score}% fit
                         </span>
-                      ))}
+                        <span className="text-[11px] text-ink-muted font-semibold num" dir="ltr">
+                          {s.block.criterion} · {s.block.points}pt
+                        </span>
+                      </div>
+                      <p className="text-xs font-semibold text-ink line-clamp-2" dir="ltr">
+                        {s.block.content?.prompt || s.block.content?.title || s.block.topic}
+                      </p>
+                      {thumbs.length > 0 && (
+                        <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+                          {thumbs.slice(0, 4).map((url, ti) => (
+                            <img
+                              key={ti}
+                              src={url}
+                              alt=""
+                              onClick={() => setPreviewImg({ id: `sug-${s.block.id}-${ti}`, title: s.block.topic || 'Illustration', url, source: 'builtin_svg', print_score: 99, reasons: [] })}
+                              title="اضغط للتكبير"
+                              className="w-14 h-11 object-contain bg-white border border-line rounded-lg p-0.5 cursor-zoom-in hover:border-brand transition flex-shrink-0"
+                            />
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex flex-wrap gap-1">
+                        {(s.reasons ?? []).map((r, ri) => (
+                          <span key={ri} className="arabic text-[10px] bg-surface border border-line text-ink-muted px-2 py-0.5 rounded-full">
+                            {r}
+                          </span>
+                        ))}
+                      </div>
+                      <div className="flex gap-1.5 pt-1">
+                        <button
+                          onClick={async () => {
+                            const nb: ExamBlock = {
+                              id: `sug-${Date.now()}-${s.block.id.slice(0, 5)}`,
+                              bank_id: s.block.id,
+                              section: s.block.section,
+                              type: s.block.block_type,
+                              criterion: s.block.criterion,
+                              points: s.block.points,
+                              topic: s.block.topic,
+                              content: s.block.content,
+                            }
+                            setBlocks(prev => [...prev, nb])
+                            setSuggestions(prev => prev.filter(x => x.block.id !== s.block.id))
+                            void api.questionBank.feedback(s.block.id, { action: 'accepted', school_year: schoolYear })
+                          }}
+                          className="arabic flex-1 py-1.5 bg-brand hover:bg-brand-hover text-white rounded-xl text-xs font-semibold transition"
+                        >
+                          + إدراج في الامتحان
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSuggestions(prev => prev.filter(x => x.block.id !== s.block.id))
+                            void api.questionBank.feedback(s.block.id, { action: 'skipped' })
+                          }}
+                          title="تجاهل (يتعلّم النظام تفضيلك)"
+                          className="p-1.5 border border-line hover:border-rose-300 text-ink-subtle hover:text-rose-600 rounded-xl transition"
+                        >
+                          <XIcon className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex gap-1.5 pt-1">
-                      <button
-                        onClick={async () => {
-                          const nb: ExamBlock = {
-                            id: `sug-${Date.now()}-${s.block.id.slice(0, 5)}`,
-                            bank_id: s.block.id,
-                            section: s.block.section,
-                            type: s.block.block_type,
-                            criterion: s.block.criterion,
-                            points: s.block.points,
-                            topic: s.block.topic,
-                            content: s.block.content,
-                          }
-                          setBlocks(prev => [...prev, nb])
-                          setSuggestions(prev => prev.filter(x => x.block.id !== s.block.id))
-                          void api.questionBank.feedback(s.block.id, { action: 'accepted', school_year: schoolYear })
-                        }}
-                        className="arabic flex-1 py-1.5 bg-brand hover:bg-brand-hover text-white rounded-xl text-xs font-semibold transition"
-                      >
-                        + إدراج في الامتحان
-                      </button>
-                      <button
-                        onClick={() => {
-                          setSuggestions(prev => prev.filter(x => x.block.id !== s.block.id))
-                          void api.questionBank.feedback(s.block.id, { action: 'skipped' })
-                        }}
-                        title="تجاهل (يتعلّم النظام تفضيلك)"
-                        className="p-1.5 border border-line hover:border-rose-300 text-ink-subtle hover:text-rose-600 rounded-xl transition"
-                      >
-                        <XIcon className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
                 {!loadingSuggest && suggestions.length === 0 && (
                   <p className="arabic text-xs text-ink-subtle text-center py-6">لا توجد اقتراحات إضافية حالياً.</p>
+                )}
+              </div>
+            </div>
+          ) : drawerTab === 'archive' ? (
+            <div className="space-y-3">
+              <div className="relative">
+                <SearchIcon className="w-3.5 h-3.5 text-ink-subtle absolute right-2.5 top-1/2 -translate-y-1/2" />
+                <input
+                  value={archiveSearch}
+                  onChange={e => setArchiveSearch(e.target.value)}
+                  placeholder="ابحث في امتحاناتك السابقة (السنة، المستوى، العنوان)…"
+                  className="arabic w-full bg-canvas border border-line rounded-xl pr-8 pl-2.5 py-1.5 text-xs focus:bg-surface focus:outline-none"
+                />
+              </div>
+
+              <div className="space-y-2 max-h-[62vh] overflow-y-auto pl-1">
+                {archiveList
+                  .filter(ex => {
+                    const q = archiveSearch.trim().toLowerCase()
+                    if (!q) return true
+                    return ex.title.toLowerCase().includes(q) || ex.school_year.toLowerCase().includes(q) || ex.level.toLowerCase().includes(q)
+                  })
+                  .map(ex => {
+                    const isOpen = expandedExamId === ex.id
+                    const detail = archiveDetails[ex.id]
+                    const isSameYear = ex.school_year === schoolYear
+                    return (
+                      <div key={ex.id} className="bg-canvas/70 border border-line rounded-2xl overflow-hidden">
+                        <button
+                          type="button"
+                          onClick={() => void toggleArchiveExam(ex.id)}
+                          className="w-full text-right p-3 hover:bg-brand-light/30 transition flex items-start justify-between gap-2"
+                        >
+                          <div className="min-w-0">
+                            <p className="text-xs font-bold text-ink truncate" dir="ltr">{ex.title}</p>
+                            <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                              <span className="text-[10px] bg-surface border border-line text-ink-muted px-2 py-0.5 rounded-full num" dir="ltr">
+                                {ex.school_year}
+                              </span>
+                              <span className="text-[10px] bg-brand-light text-brand px-2 py-0.5 rounded-full" dir="ltr">
+                                {ex.level} · T{ex.trimester}
+                              </span>
+                              {isSameYear && (
+                                <span className="arabic text-[10px] bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded-full">
+                                  نفس السنة
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          <span className="text-xs text-ink-subtle font-bold">{isOpen ? '▾' : '◂'}</span>
+                        </button>
+
+                        {isOpen && (
+                          <div className="border-t border-line bg-surface p-2.5 space-y-2">
+                            {loadingArchiveId === ex.id ? (
+                              <p className="arabic text-[11px] text-ink-subtle text-center py-2">جاري تحميل التمارين…</p>
+                            ) : !detail || !Array.isArray(detail.blocks) || detail.blocks.length === 0 ? (
+                              <p className="arabic text-[11px] text-ink-subtle text-center py-2">لا توجد تمارين مستخرجة في هذا الامتحان.</p>
+                            ) : (
+                              detail.blocks
+                                .filter(b => b.type !== 'section_header')
+                                .map((b, bi) => {
+                                  const thumbs = getBlockThumbs(b.content)
+                                  const label = b.content?.prompt || b.content?.title || b.topic || b.type
+                                  return (
+                                    <div key={b.id || bi} className="bg-canvas/60 border border-line rounded-xl p-2.5 space-y-1.5">
+                                      <div className="flex items-center justify-between gap-1 text-[10px] text-ink-muted" dir="ltr">
+                                        <span className="font-bold text-brand">{b.section} · {b.type}</span>
+                                        <span className="num font-bold">{b.criterion} · {b.points}pt</span>
+                                      </div>
+                                      <p className="text-xs font-semibold text-ink line-clamp-2" dir="ltr">{label}</p>
+                                      {thumbs.length > 0 && (
+                                        <div className="flex gap-1.5 overflow-x-auto">
+                                          {thumbs.slice(0, 4).map((url, ti) => (
+                                            <img
+                                              key={ti}
+                                              src={url}
+                                              alt=""
+                                              onClick={() => setPreviewImg({ id: `arc-${b.id}-${ti}`, title: label, url, source: 'builtin_svg', print_score: 99, reasons: [`من ${ex.school_year}`] })}
+                                              title="اضغط للتكبير"
+                                              className="w-12 h-10 object-contain bg-white border border-line rounded-lg p-0.5 cursor-zoom-in hover:border-brand transition flex-shrink-0"
+                                            />
+                                          ))}
+                                        </div>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const cloned: ExamBlock = {
+                                            ...b,
+                                            id: `old-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                                            content: JSON.parse(JSON.stringify(b.content ?? {})),
+                                          }
+                                          setBlocks(prev => [...prev, cloned])
+                                          ui.toast('تم اقتباس التمرين (برسومه) وإدراجه في الامتحان', 'success')
+                                        }}
+                                        className="arabic w-full py-1 bg-brand hover:bg-brand-hover text-white rounded-lg text-[11px] font-semibold transition"
+                                      >
+                                        + اقتباس هذا التمرين
+                                      </button>
+                                    </div>
+                                  )
+                                })
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                {archiveList.length === 0 && (
+                  <p className="arabic text-xs text-ink-subtle text-center py-6">
+                    لا توجد امتحانات سابقة بعد. استوردوا امتحاناتكم القديمة (Word / PDF) من الخزينة لاقتباس تمارينها هنا.
+                  </p>
                 )}
               </div>
             </div>
@@ -903,13 +1113,14 @@ export default function ExamEditor() {
 
 // ── Individual French Block Editor Card ──────────────────────────────────────
 function BlockEditorCard({
-  block, index, isImgTarget, onSelectImgTarget, onPreviewImage, onUpdate, onUpdateContent, onMove, onDelete,
+  block, index, isImgTarget, onSelectImgTarget, onPreviewImage, onSaveToBank, onUpdate, onUpdateContent, onMove, onDelete,
 }: {
   block: ExamBlock
   index: number
   isImgTarget: boolean
   onSelectImgTarget: () => void
   onPreviewImage: (url: string, label: string) => void
+  onSaveToBank: () => void
   onUpdate: (patch: Partial<ExamBlock>) => void
   onUpdateContent: (patch: Record<string, any>) => void
   onMove: (dir: -1 | 1) => void
@@ -921,6 +1132,7 @@ function BlockEditorCard({
     : block.section === 'langue'
     ? 'bg-violet-50 text-violet-700 border-violet-200'
     : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+  const hasDedicatedImgUI = block.type === 'reading_text' || block.type === 'reading_comprehension' || block.type === 'production_ecrite' || block.type === 'section_header'
 
   return (
     <div className={`bg-surface border rounded-3xl p-4 shadow-card space-y-3 transition ${
@@ -938,6 +1150,28 @@ function BlockEditorCard({
         </div>
 
         <div className="flex items-center gap-1.5">
+          {block.type !== 'section_header' && (
+            <>
+              <button
+                type="button"
+                onClick={onSelectImgTarget}
+                title="إرفاق رسم توضيحي لهذا التمرين"
+                className={`p-1.5 rounded-lg border transition ${
+                  isImgTarget ? 'border-brand bg-brand-light text-brand' : 'border-line text-ink-muted hover:text-brand hover:border-brand/40'
+                }`}
+              >
+                <ImageIcon className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={onSaveToBank}
+                title="حفظ هذا التمرين (برسومه) في بنك التمارين"
+                className="p-1.5 rounded-lg border border-line text-ink-muted hover:text-emerald-700 hover:border-emerald-300 transition"
+              >
+                <BookOpenIcon className="w-3.5 h-3.5" />
+              </button>
+            </>
+          )}
           <input
             value={block.criterion}
             onChange={e => onUpdate({ criterion: e.target.value })}
@@ -961,6 +1195,30 @@ function BlockEditorCard({
           </button>
         </div>
       </div>
+
+      {/* Optional illustration attached to any exercise block */}
+      {!hasDedicatedImgUI && c.image_url && (
+        <div className="flex items-center gap-3 bg-canvas/70 border border-line rounded-xl p-2" dir="rtl">
+          <img
+            src={c.image_url}
+            alt=""
+            onClick={() => onPreviewImage(c.image_url, block.topic || 'رسم التمرين')}
+            title="اضغط للتكبير"
+            className="w-20 h-16 object-contain bg-white border border-line rounded-lg p-0.5 cursor-zoom-in hover:border-brand transition"
+          />
+          <div className="flex-1 min-w-0">
+            <p className="arabic text-[11px] font-semibold text-ink">رسم توضيحي مرفق بالتمرين</p>
+            <p className="arabic text-[10px] text-ink-subtle">يُطبع تلقائياً مع هذا التمرين في ورقة A4 ويُحفظ معه في البنك.</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => onUpdateContent({ image_url: '' })}
+            className="arabic text-[11px] text-rose-600 hover:underline px-2"
+          >
+            إزالة
+          </button>
+        </div>
+      )}
 
       {/* Block-specific French editors (LTR) */}
       <div dir="ltr" className="space-y-2.5 text-left">

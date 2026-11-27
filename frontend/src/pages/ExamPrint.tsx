@@ -248,6 +248,11 @@ export default function ExamPrint() {
             return (
               <section key={b.id} className="flex gap-3 items-start break-inside-avoid">
                 <div className={`flex-1 min-w-0 space-y-2 ${textSizeCls}`}>
+                  {b.type !== 'reading_text' && b.type !== 'production_ecrite' && c.image_url && (
+                    <div className="mb-1.5">
+                      <img src={c.image_url} alt="" className="max-h-32 max-w-[220px] object-contain border border-gray-200 rounded bg-white p-1" />
+                    </div>
+                  )}
                   {b.type === 'reading_text' && (
                     <div className="border border-gray-400 rounded-lg p-4 bg-gray-50/40 space-y-2 overflow-hidden">
                       {c.title && <h2 className="text-center font-bold text-base underline">{c.title}</h2>}

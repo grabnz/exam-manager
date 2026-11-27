@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,7 +19,6 @@ import (
 	"exam-manager/backend/pkg/auth"
 	"exam-manager/backend/pkg/db"
 	"exam-manager/backend/pkg/httpx"
-	"github.com/ledongthuc/pdf"
 	"gorm.io/gorm"
 )
 
@@ -364,13 +364,58 @@ func (h *ExamsHandler) UploadLegacy(w http.ResponseWriter, r *http.Request) {
 		trim = 1
 	}
 	modNum, _ := strconv.Atoi(r.FormValue("module_num"))
-
-	// If PDF, extract text and auto-slice into starter French exam blocks
-	extractedBlocks := []map[string]any{}
-	if strings.HasSuffix(strings.ToLower(header.Filename), ".pdf") {
-		extractedBlocks = extractBlocksFromPDF(data)
+	mode := strings.TrimSpace(r.FormValue("mode")) // archive_and_bank (default) | bank_only
+	if mode != "bank_only" {
+		mode = "archive_and_bank"
 	}
-	blocksBytes, _ := json.Marshal(extractedBlocks)
+
+	// Extract typed French exam blocks AND embedded illustrations from .docx, .pdf, or image
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	var res importResult
+	switch ext {
+	case ".docx":
+		res = extractFromDOCX(data, title)
+	case ".pdf":
+		res = extractFromPDF(data, title)
+	case ".png", ".jpg", ".jpeg", ".webp":
+		mime := "image/jpeg"
+		if ext == ".png" {
+			mime = "image/png"
+		} else if ext == ".webp" {
+			mime = "image/webp"
+		}
+		if len(data) <= 1_500_000 {
+			du := "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data)
+			res.Images = []extractedImage{{Name: title, DataURL: du}}
+			res.Blocks = []map[string]any{{
+				"id": "ext-1", "section": "lecture", "type": "reading_text", "criterion": "C1", "points": 0,
+				"topic": title,
+				"content": map[string]any{"title": title, "text": "", "source": "Image importée", "image_url": du},
+			}}
+		}
+	}
+
+	// Persist all extracted illustrations into "رسومي المحفوظة" so they can be reused in any future exam
+	savedImgCount := 0
+	for _, im := range res.Images {
+		if im.DataURL == "" {
+			continue
+		}
+		if err := h.DB.Create(&db.SavedIllustration{
+			OwnerID: u.ID,
+			Title:   im.Name,
+			Style:   "extracted",
+			IsBW:    false,
+			DataURL: im.DataURL,
+		}).Error; err == nil {
+			savedImgCount++
+		}
+	}
+
+	if res.Blocks == nil {
+		res.Blocks = []map[string]any{}
+	}
+	blocksBytes, _ := json.Marshal(res.Blocks)
 
 	row := db.ExamPaper{
 		OwnerID:        u.ID,
@@ -389,14 +434,48 @@ func (h *ExamsHandler) UploadLegacy(w http.ResponseWriter, r *http.Request) {
 		SourceFileType: header.Header.Get("Content-Type"),
 		SourceFileData: data,
 	}
+
+	if mode == "bank_only" {
+		if len(res.Blocks) > 0 {
+			h.syncBlocksToBank(u.ID, row)
+		}
+		httpx.WriteJSON(w, http.StatusCreated, map[string]any{
+			"mode":                   "bank_only",
+			"title":                  title,
+			"extracted_blocks_count": len(res.Blocks),
+			"extracted_images_count": savedImgCount,
+		})
+		return
+	}
+
 	if err := h.DB.Create(&row).Error; err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	if len(extractedBlocks) > 0 {
+	if len(res.Blocks) > 0 {
 		h.syncBlocksToBank(u.ID, row)
 	}
-	httpx.WriteJSON(w, http.StatusCreated, serializeExam(row, true))
+	out := serializeExam(row, true)
+	httpx.WriteJSON(w, http.StatusCreated, map[string]any{
+		"id":                     out.ID,
+		"title":                  out.Title,
+		"school_year":            out.SchoolYear,
+		"level":                  out.Level,
+		"subject_code":           out.SubjectCode,
+		"trimester":              out.Trimester,
+		"module_num":             out.ModuleNum,
+		"exam_type":              out.ExamType,
+		"direction":              out.Direction,
+		"blocks":                 out.Blocks,
+		"total_points":           out.TotalPoints,
+		"used_count":             out.UsedCount,
+		"avg_score":              out.AvgScore,
+		"source_file_name":       out.SourceFileName,
+		"has_attachment":         out.HasAttachment,
+		"created_at":             out.CreatedAt,
+		"updated_at":             out.UpdatedAt,
+		"extracted_images_count": savedImgCount,
+	})
 }
 
 func (h *ExamsHandler) DownloadAttachment(w http.ResponseWriter, r *http.Request) {
@@ -418,91 +497,6 @@ func (h *ExamsHandler) DownloadAttachment(w http.ResponseWriter, r *http.Request
 	w.Header().Set("Content-Type", ct)
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", row.SourceFileName))
 	_, _ = w.Write(row.SourceFileData)
-}
-
-func extractBlocksFromPDF(data []byte) []map[string]any {
-	reader, err := pdf.NewReader(bytes.NewReader(data), int64(len(data)))
-	if err != nil {
-		return nil
-	}
-	var buf strings.Builder
-	for i := 1; i <= reader.NumPage() && i <= 4; i++ {
-		p := reader.Page(i)
-		if p.V.IsNull() {
-			continue
-		}
-		txt, err := p.GetPlainText(nil)
-		if err == nil {
-			buf.WriteString(txt)
-			buf.WriteString("\n")
-		}
-	}
-	raw := strings.TrimSpace(buf.String())
-	if raw == "" {
-		return nil
-	}
-	// Heuristic segmentation into French primary school blocks
-	lines := strings.Split(raw, "\n")
-	var clean []string
-	for _, l := range lines {
-		l = strings.TrimSpace(l)
-		if len(l) > 2 {
-			clean = append(clean, l)
-		}
-	}
-	if len(clean) == 0 {
-		return nil
-	}
-	blocks := make([]map[string]any, 0)
-	var cur []string
-	flush := func(sec, btype, crit string, pts float64) {
-		if len(cur) == 0 {
-			return
-		}
-		text := strings.Join(cur, "\n")
-		id := fmt.Sprintf("ext-%d", len(blocks)+1)
-		if btype == "reading_text" {
-			blocks = append(blocks, map[string]any{
-				"id": id, "section": "lecture", "type": "reading_text", "criterion": "C1", "points": 0,
-				"content": map[string]any{"title": "Texte extrait", "text": text, "source": "Import PDF"},
-			})
-		} else {
-			blocks = append(blocks, map[string]any{
-				"id": id, "section": sec, "type": "open_question", "criterion": crit, "points": pts,
-				"content": map[string]any{"prompt": text, "lines": 2, "answer": ""},
-			})
-		}
-		cur = nil
-	}
-
-	curSec := "lecture"
-	for _, l := range clean {
-		low := strings.ToLower(l)
-		if strings.Contains(low, "langue") || strings.Contains(low, "grammaire") || strings.Contains(low, "conjugaison") {
-			flush(curSec, "reading_text", "C1", 2)
-			curSec = "langue"
-			continue
-		}
-		if strings.Contains(low, "production") || strings.Contains(low, "essai") {
-			flush(curSec, "open_question", "C5", 3)
-			curSec = "production"
-			continue
-		}
-		if strings.HasPrefix(low, "1)") || strings.HasPrefix(low, "2)") || strings.HasPrefix(low, "3)") || strings.HasPrefix(low, "exercice") {
-			if len(blocks) == 0 && curSec == "lecture" {
-				flush("lecture", "reading_text", "C1", 0)
-			} else {
-				flush(curSec, "open_question", "C2", 2)
-			}
-		}
-		cur = append(cur, l)
-	}
-	if curSec == "production" {
-		flush("production", "open_question", "C1", 6)
-	} else {
-		flush(curSec, "open_question", "C2", 2)
-	}
-	return blocks
 }
 
 // ── Personal Exercise Bank & Sync ────────────────────────────────────────────

@@ -1,15 +1,27 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { api, ExamPaper, QuestionBankItem } from '../api/client'
+import { api, ExamBlock, ExamPaper, QuestionBankItem } from '../api/client'
 import AppShell from '../components/AppShell'
 import { useUI } from '../components/ui'
 import { EmptyState, ListSkeleton } from '../components/Skeleton'
 import {
   FileIcon, PlusIcon, SparklesIcon, UploadIcon, CopyIcon, PrinterIcon,
-  TrashIcon, SearchIcon, DownloadIcon, BookOpenIcon, EditIcon,
+  TrashIcon, SearchIcon, DownloadIcon, BookOpenIcon, EditIcon, CheckIcon, ImageIcon,
 } from '../components/icons'
 import { getModulesForLevel } from '../lib/tunisianFrenchProgram'
+
+function getBankThumbs(content?: Record<string, any>): string[] {
+  if (!content) return []
+  const urls: string[] = []
+  if (typeof content.image_url === 'string' && content.image_url) urls.push(content.image_url)
+  if (Array.isArray(content.panels)) {
+    for (const p of content.panels) {
+      if (typeof p === 'string' && p && !urls.includes(p)) urls.push(p)
+    }
+  }
+  return urls
+}
 
 const LEVELS = ['3ème année', '4ème année', '5ème année', '6ème année']
 const TRIMESTERS = [1, 2, 3]
@@ -29,14 +41,15 @@ export default function Exams() {
   const navigate = useNavigate()
   const qc = useQueryClient()
   const ui = useUI()
-  const fileRef = useRef<HTMLInputElement>(null)
 
   const [tab, setTab] = useState<'archive' | 'bank'>('archive')
   const [search, setSearch] = useState('')
   const [filterLevel, setFilterLevel] = useState('')
   const [filterTrim, setFilterTrim] = useState<number>(0)
   const [genOpen, setGenOpen] = useState(false)
-  const [uploading, setUploading] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [selectedBankIds, setSelectedBankIds] = useState<string[]>([])
+  const [creatingFromBank, setCreatingFromBank] = useState(false)
 
   const { data: exams = [], isLoading: loadingExams } = useQuery<ExamPaper[]>({
     queryKey: ['exams', filterLevel, filterTrim, search],
@@ -81,41 +94,62 @@ export default function Exams() {
     navigate(`/exams/${created.id}`)
   }
 
-  async function handleLegacyUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const f = e.target.files?.[0]
-    if (!f) return
-    setUploading(true)
+  async function createExamFromSelectedBank() {
+    const picked = bank.filter(b => selectedBankIds.includes(b.id))
+    if (picked.length === 0) return
+    setCreatingFromBank(true)
     try {
-      const created = await api.exams.uploadLegacy(f, {
+      const blocks: ExamBlock[] = picked.map((b, i) => ({
+        id: `pick-${Date.now()}-${i}`,
+        bank_id: b.id,
+        section: b.section,
+        type: b.block_type,
+        criterion: b.criterion,
+        points: b.points,
+        topic: b.topic,
+        content: b.content,
+      }))
+      const totalPts = blocks.reduce((s, b) => s + (Number(b.points) || 0), 0)
+      const lvl = filterLevel || picked[0].level || '4ème année'
+      const created = await api.exams.create({
+        title: `Évaluation de Français — ${lvl}`,
         school_year: currentSchoolYear(),
-        level: filterLevel || '4ème année',
-        trimester: filterTrim || 1,
+        level: lvl,
+        trimester: filterTrim || picked[0].trimester || 1,
+        module_num: picked[0].module_num || 1,
+        exam_type: 'Évaluation',
+        direction: 'ltr',
+        blocks,
+        total_points: totalPts || 20,
       })
       await qc.invalidateQueries({ queryKey: ['exams'] })
-      await qc.invalidateQueries({ queryKey: ['question-bank'] })
-      ui.toast(`تم أرشفة الامتحان واستخراج ${created.blocks.length} تمرين`, 'success')
+      setSelectedBankIds([])
+      ui.toast(`تم إنشاء امتحان من ${picked.length} تمارين مختارة`, 'success')
       navigate(`/exams/${created.id}`)
     } catch (err: any) {
-      ui.toast(err.message || 'فشل استيراد الملف', 'error')
+      ui.toast(err.message || 'تعذّر إنشاء الامتحان', 'error')
     } finally {
-      setUploading(false)
-      e.target.value = ''
+      setCreatingFromBank(false)
     }
   }
+
+  const selectedBankPoints = useMemo(
+    () => bank.filter(b => selectedBankIds.includes(b.id)).reduce((s, b) => s + (Number(b.points) || 0), 0),
+    [bank, selectedBankIds],
+  )
 
   return (
     <AppShell
       title="خزينة الامتحانات وبنك التمارين"
-      subtitle="أرشيف سنوي لامتحانات الفرنسية، مولّد متوازن، واستيراد الامتحانات القديمة إلى تمارين جاهزة"
+      subtitle="أرشيف سنوي لامتحانات الفرنسية، مولّد متوازن، واستيراد الامتحانات القديمة (Word / PDF) بتمارينها ورسومها"
       actions={
         <div className="flex items-center gap-2 flex-wrap">
           <button
-            onClick={() => fileRef.current?.click()}
-            disabled={uploading}
+            onClick={() => setImportOpen(true)}
             className="arabic inline-flex items-center gap-1.5 text-xs bg-surface border border-line hover:border-brand/40 text-ink px-3 py-2 rounded-xl font-semibold transition"
           >
             <UploadIcon className="w-3.5 h-3.5 text-brand" />
-            <span>{uploading ? 'جاري الاستخراج…' : 'استيراد امتحان قديم (PDF)'}</span>
+            <span>استيراد امتحانات قديمة (Word / PDF)</span>
           </button>
           <button
             onClick={() => setGenOpen(true)}
@@ -132,7 +166,6 @@ export default function Exams() {
         </div>
       }
     >
-      <input ref={fileRef} type="file" accept=".pdf,.doc,.docx,image/*" className="hidden" onChange={handleLegacyUpload} />
 
       <div className="space-y-5" dir="rtl">
         {/* Tabs + Filters */}
@@ -310,49 +343,125 @@ export default function Exams() {
         {/* ── Tab 2: Personal Learning Exercise Bank ── */}
         {tab === 'bank' && (
           loadingBank ? <ListSkeleton rows={5} /> : (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-              {bank.map(b => {
-                const sec = SECTIONS[b.section] ?? SECTIONS.langue
-                const preview = b.content?.prompt || b.content?.title || b.topic || b.block_type
-                return (
-                  <div key={b.id} className="bg-surface border border-line rounded-3xl p-4 shadow-card space-y-2.5">
-                    <div className="flex items-center justify-between gap-2 flex-wrap">
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${sec.tint}`} dir="ltr">
-                          {sec.label}
-                        </span>
-                        <span className="text-[11px] bg-canvas text-ink font-bold px-2 py-0.5 rounded-full num" dir="ltr">
-                          {b.criterion} · {b.points}pt
-                        </span>
-                        <span className="text-[11px] text-ink-subtle" dir="ltr">{b.level}</span>
-                      </div>
-                      {!b.is_starter && (
-                        <button
-                          onClick={async () => {
-                            await api.questionBank.delete(b.id)
-                            await qc.invalidateQueries({ queryKey: ['question-bank'] })
-                          }}
-                          className="p-1 text-ink-subtle hover:text-rose-600 rounded-lg transition"
-                        >
-                          <TrashIcon className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                    <p className="text-sm font-semibold text-ink line-clamp-2" dir="ltr">{preview}</p>
-                    <div className="flex items-center justify-between text-[11px] text-ink-subtle pt-2 border-t border-line num">
-                      <span className="arabic">
-                        {b.topic || b.block_type}
-                        {b.empirical_pass_rate != null && ` · نجاح فعلي ${Math.round(b.empirical_pass_rate * 100)}%`}
-                      </span>
-                      <span className="arabic">استُعمل {b.times_used} · قُبل {b.times_accepted}</span>
-                    </div>
+            <div className="space-y-4">
+              {selectedBankIds.length > 0 && (
+                <div className="sticky top-16 z-10 bg-brand text-white rounded-2xl px-4 py-3 shadow-float flex items-center justify-between gap-3 flex-wrap">
+                  <div className="arabic text-xs font-semibold num">
+                    تم اختيار {selectedBankIds.length} تمارين · المجموع: {selectedBankPoints} / 20 نقطة
                   </div>
-                )
-              })}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => void createExamFromSelectedBank()}
+                      disabled={creatingFromBank}
+                      className="arabic inline-flex items-center gap-1.5 text-xs bg-white text-brand hover:bg-brand-light px-3.5 py-1.5 rounded-xl font-bold transition"
+                    >
+                      <CheckIcon className="w-3.5 h-3.5" /> {creatingFromBank ? 'جاري الإنشاء…' : 'إنشاء امتحان من التمارين المختارة'}
+                    </button>
+                    <button
+                      onClick={() => setSelectedBankIds([])}
+                      className="arabic text-xs text-white/80 hover:text-white px-2 py-1"
+                    >
+                      إلغاء التحديد
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                {bank.map(b => {
+                  const sec = SECTIONS[b.section] ?? SECTIONS.langue
+                  const preview = b.content?.prompt || b.content?.title || b.topic || b.block_type
+                  const thumbs = getBankThumbs(b.content)
+                  const isPicked = selectedBankIds.includes(b.id)
+                  return (
+                    <div
+                      key={b.id}
+                      onClick={() => setSelectedBankIds(prev => prev.includes(b.id) ? prev.filter(x => x !== b.id) : [...prev, b.id])}
+                      className={`cursor-pointer bg-surface border rounded-3xl p-4 shadow-card space-y-2.5 transition ${
+                        isPicked ? 'border-brand ring-2 ring-brand/20 bg-brand-light/15' : 'border-line hover:border-brand/40'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2 flex-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <input
+                            type="checkbox"
+                            checked={isPicked}
+                            onChange={() => {}}
+                            className="w-4 h-4 accent-brand rounded"
+                          />
+                          <span className={`text-[11px] font-semibold px-2.5 py-0.5 rounded-full border ${sec.tint}`} dir="ltr">
+                            {sec.label}
+                          </span>
+                          <span className="text-[11px] bg-canvas text-ink font-bold px-2 py-0.5 rounded-full num" dir="ltr">
+                            {b.criterion} · {b.points}pt
+                          </span>
+                          <span className="text-[11px] text-ink-subtle" dir="ltr">{b.level}</span>
+                          {thumbs.length > 0 && (
+                            <span className="arabic inline-flex items-center gap-1 text-[10px] bg-amber-50 text-amber-800 border border-amber-200 px-2 py-0.5 rounded-full num">
+                              <ImageIcon className="w-3 h-3" /> {thumbs.length}
+                            </span>
+                          )}
+                        </div>
+                        {!b.is_starter && (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation()
+                              await api.questionBank.delete(b.id)
+                              await qc.invalidateQueries({ queryKey: ['question-bank'] })
+                            }}
+                            className="p-1 text-ink-subtle hover:text-rose-600 rounded-lg transition"
+                          >
+                            <TrashIcon className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
+                      <p className="text-sm font-semibold text-ink line-clamp-2" dir="ltr">{preview}</p>
+                      {thumbs.length > 0 && (
+                        <div className="flex gap-2 overflow-x-auto pb-0.5">
+                          {thumbs.slice(0, 4).map((url, ti) => (
+                            <img
+                              key={ti}
+                              src={url}
+                              alt=""
+                              className="w-16 h-12 object-contain bg-white border border-line rounded-xl p-0.5 flex-shrink-0"
+                            />
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between text-[11px] text-ink-subtle pt-2 border-t border-line num">
+                        <span className="arabic">
+                          {b.topic || b.block_type}
+                          {b.last_used_year && ` · ${b.last_used_year}`}
+                          {b.empirical_pass_rate != null && ` · نجاح فعلي ${Math.round(b.empirical_pass_rate * 100)}%`}
+                        </span>
+                        <span className="arabic">استُعمل {b.times_used} · قُبل {b.times_accepted}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
             </div>
           )
         )}
       </div>
+
+      {/* Legacy Multi-File Exam Import Modal (DOCX + PDF + Images) */}
+      {importOpen && (
+        <ImportLegacyModal
+          defaultLevel={filterLevel || '4ème année'}
+          defaultTrim={filterTrim || 1}
+          onClose={() => setImportOpen(false)}
+          onDone={async (summary) => {
+            setImportOpen(false)
+            await qc.invalidateQueries({ queryKey: ['exams'] })
+            await qc.invalidateQueries({ queryKey: ['question-bank'] })
+            ui.toast(summary.message, 'success')
+            if (summary.openExamId) {
+              navigate(`/exams/${summary.openExamId}`)
+            }
+          }}
+        />
+      )}
 
       {/* Balanced French Exam Generator Modal */}
       {genOpen && (
@@ -462,6 +571,162 @@ function GenerateExamModal({ defaultLevel, defaultTrim, onClose, onGenerated }: 
           <button type="submit" disabled={busy}
                   className="arabic flex-1 py-2.5 bg-brand hover:bg-brand-hover disabled:bg-gray-300 text-white rounded-xl text-sm font-semibold shadow-sm transition">
             {busy ? 'جاري التوليد…' : 'توليد وفتح في المحرر'}
+          </button>
+          <button type="button" onClick={onClose}
+                  className="arabic px-4 py-2.5 border border-line rounded-xl text-sm text-ink-muted hover:bg-canvas transition">
+            إلغاء
+          </button>
+        </div>
+      </form>
+    </div>
+  )
+}
+
+function ImportLegacyModal({ defaultLevel, defaultTrim, onClose, onDone }: {
+  defaultLevel: string
+  defaultTrim: number
+  onClose: () => void
+  onDone: (summary: { message: string; openExamId?: string }) => Promise<void>
+}) {
+  const [files, setFiles] = useState<File[]>([])
+  const [level, setLevel] = useState(defaultLevel)
+  const [trimester, setTrimester] = useState(defaultTrim)
+  const [moduleNum, setModuleNum] = useState(0)
+  const [year, setYear] = useState('2024-2025')
+  const [mode, setMode] = useState<'archive_and_bank' | 'bank_only'>('archive_and_bank')
+  const [busy, setBusy] = useState(false)
+  const [errMsg, setErrMsg] = useState('')
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    if (files.length === 0) return
+    setBusy(true)
+    setErrMsg('')
+    try {
+      let totalBlocks = 0
+      let totalImgs = 0
+      let firstExamId: string | undefined
+      for (const f of files) {
+        const res = await api.exams.uploadLegacy(f, {
+          school_year: year,
+          level,
+          trimester,
+          module_num: moduleNum,
+          mode,
+        })
+        totalBlocks += res.extracted_blocks_count ?? (Array.isArray(res.blocks) ? res.blocks.length : 0)
+        totalImgs += res.extracted_images_count ?? 0
+        if (!firstExamId && mode === 'archive_and_bank' && res.id) {
+          firstExamId = res.id
+        }
+      }
+      const msg = mode === 'bank_only'
+        ? `تمت إضافة ${totalBlocks} تمرين و ${totalImgs} رسم توضيحي إلى بنك التمارين ومكتبة الرسوم`
+        : `تم استيراد ${files.length} ملف واستخراج ${totalBlocks} تمرين و ${totalImgs} رسم توضيحي`
+      await onDone({ message: msg, openExamId: files.length === 1 ? firstExamId : undefined })
+    } catch (err: any) {
+      setErrMsg(err.message || 'تعذّر استيراد الملفات')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 backdrop-blur-[2px] px-4 animate-fade-in" onClick={onClose}>
+      <form onSubmit={submit} onClick={e => e.stopPropagation()}
+            className="w-full max-w-lg bg-surface border border-line rounded-3xl p-6 space-y-4 shadow-float animate-scale-in" dir="rtl">
+        <div className="flex items-center gap-3">
+          <span className="w-10 h-10 rounded-2xl bg-brand-light text-brand flex items-center justify-center">
+            <UploadIcon className="w-5 h-5" />
+          </span>
+          <div>
+            <h3 className="arabic text-base font-bold text-ink">استيراد امتحانات قديمة (Word / PDF / صور)</h3>
+            <p className="arabic text-xs text-ink-muted">يستخرج التمارين والرسوم التوضيحية تلقائياً ويضيفها إلى بنك التمارين والاقتراحات</p>
+          </div>
+        </div>
+
+        <label className="block border-2 border-dashed border-brand-mid hover:border-brand bg-brand-light/20 rounded-2xl p-4 text-center cursor-pointer transition">
+          <input
+            type="file"
+            multiple
+            accept=".docx,.pdf,.png,.jpg,.jpeg,.webp"
+            className="hidden"
+            onChange={e => setFiles(Array.from(e.target.files ?? []))}
+          />
+          <p className="arabic text-xs font-bold text-brand">
+            {files.length > 0 ? `تم اختيار ${files.length} ملف` : 'اضغطوا لاختيار ملف واحد أو عدة ملفات (.docx / .pdf / صور)'}
+          </p>
+          {files.length > 0 && (
+            <p className="text-[11px] text-ink-muted mt-1 truncate" dir="ltr">
+              {files.map(f => f.name).join(' · ')}
+            </p>
+          )}
+        </label>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="arabic block text-xs font-semibold text-ink-muted mb-1">السنة الدراسية الأصلية</label>
+            <input value={year} onChange={e => setYear(e.target.value)} dir="ltr"
+                   className="w-full bg-canvas border border-line rounded-xl px-3 py-2 text-sm num" />
+          </div>
+          <div>
+            <label className="arabic block text-xs font-semibold text-ink-muted mb-1">المستوى</label>
+            <select value={level} onChange={e => setLevel(e.target.value)} dir="ltr"
+                    className="w-full bg-canvas border border-line rounded-xl px-3 py-2 text-sm">
+              {LEVELS.map(l => <option key={l} value={l}>{l}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="arabic block text-xs font-semibold text-ink-muted mb-1">الثلاثي</label>
+            <select value={trimester} onChange={e => setTrimester(Number(e.target.value))}
+                    className="arabic w-full bg-canvas border border-line rounded-xl px-3 py-2 text-sm">
+              {TRIMESTERS.map(t => <option key={t} value={t}>الثلاثي {t}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="arabic block text-xs font-semibold text-ink-muted mb-1">الوحدة (Module)</label>
+            <select value={moduleNum} onChange={e => setModuleNum(Number(e.target.value))} dir="ltr"
+                    className="w-full bg-canvas border border-line rounded-xl px-3 py-2 text-xs">
+              <option value={0}>Non précisé</option>
+              {getModulesForLevel(level).map(m => (
+                <option key={m.num} value={m.num}>M{m.num} — {m.title}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className="arabic block text-xs font-semibold text-ink-muted">طريقة الحفظ</label>
+          <div className="grid grid-cols-2 gap-2">
+            <button
+              type="button"
+              onClick={() => setMode('archive_and_bank')}
+              className={`arabic text-right p-2.5 rounded-xl border text-xs transition ${
+                mode === 'archive_and_bank' ? 'bg-brand-light/60 border-brand text-brand font-bold' : 'bg-canvas border-line text-ink-muted'
+              }`}
+            >
+              <div>أرشفة الامتحان + بنك التمارين</div>
+              <div className="text-[10px] font-normal opacity-80">يُفتح للتعديل وتُضاف تمارينه ورسومه للبنك</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('bank_only')}
+              className={`arabic text-right p-2.5 rounded-xl border text-xs transition ${
+                mode === 'bank_only' ? 'bg-brand-light/60 border-brand text-brand font-bold' : 'bg-canvas border-line text-ink-muted'
+              }`}
+            >
+              <div>تغذية الاقتراحات فقط</div>
+              <div className="text-[10px] font-normal opacity-80">استخراج التمارين والرسوم بدون إضافة للأرشيف</div>
+            </button>
+          </div>
+        </div>
+
+        {errMsg && <p className="arabic text-xs text-rose-600 font-semibold">{errMsg}</p>}
+
+        <div className="flex gap-2 pt-1">
+          <button type="submit" disabled={busy || files.length === 0}
+                  className="arabic flex-1 py-2.5 bg-brand hover:bg-brand-hover disabled:bg-gray-300 text-white rounded-xl text-sm font-semibold shadow-sm transition">
+            {busy ? 'جاري استخراج التمارين والرسوم…' : 'استيراد واستخراج التمارين'}
           </button>
           <button type="button" onClick={onClose}
                   className="arabic px-4 py-2.5 border border-line rounded-xl text-sm text-ink-muted hover:bg-canvas transition">

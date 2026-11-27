@@ -601,7 +601,17 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       }),
-    uploadLegacy: (file: File, meta: { title?: string; school_year?: string; level?: string; trimester?: number; module_num?: number }) => {
+    uploadLegacy: (
+      file: File,
+      meta: {
+        title?: string
+        school_year?: string
+        level?: string
+        trimester?: number
+        module_num?: number
+        mode?: 'archive_and_bank' | 'bank_only'
+      },
+    ) => {
       const fd = new FormData()
       fd.append('file', file)
       if (meta.title) fd.append('title', meta.title)
@@ -609,7 +619,11 @@ export const api = {
       if (meta.level) fd.append('level', meta.level)
       if (meta.trimester) fd.append('trimester', String(meta.trimester))
       if (meta.module_num) fd.append('module_num', String(meta.module_num))
-      return req<ExamPaper>('/exams/upload-legacy', { method: 'POST', body: fd })
+      if (meta.mode) fd.append('mode', meta.mode)
+      return req<ExamPaper & { extracted_images_count?: number; extracted_blocks_count?: number; mode?: string }>('/exams/upload-legacy', {
+        method: 'POST',
+        body: fd,
+      })
     },
     downloadAttachment: async (id: string, filename: string): Promise<string | null> => {
       const res = await fetch(`${BASE}/exams/${id}/attachment`, { headers: authHeaders() })
