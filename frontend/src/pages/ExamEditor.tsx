@@ -422,6 +422,7 @@ export default function ExamEditor() {
                   index={idx}
                   isImgTarget={activeImageTarget === b.id}
                   onSelectImgTarget={() => { setActiveImageTarget(b.id); setDrawerTab('illustrations') }}
+                  onPreviewImage={(url, label) => setPreviewImg({ id: `blk-${b.id}`, title: label, url, source: 'builtin_svg', print_score: 99, reasons: [] })}
                   onUpdate={patch => updateBlock(b.id, patch)}
                   onUpdateContent={patch => updateContent(b.id, patch)}
                   onMove={dir => {
@@ -752,12 +753,13 @@ export default function ExamEditor() {
 
 // ── Individual French Block Editor Card ──────────────────────────────────────
 function BlockEditorCard({
-  block, index, isImgTarget, onSelectImgTarget, onUpdate, onUpdateContent, onMove, onDelete,
+  block, index, isImgTarget, onSelectImgTarget, onPreviewImage, onUpdate, onUpdateContent, onMove, onDelete,
 }: {
   block: ExamBlock
   index: number
   isImgTarget: boolean
   onSelectImgTarget: () => void
+  onPreviewImage: (url: string, label: string) => void
   onUpdate: (patch: Partial<ExamBlock>) => void
   onUpdateContent: (patch: Record<string, any>) => void
   onMove: (dir: -1 | 1) => void
@@ -825,7 +827,13 @@ function BlockEditorCard({
             </div>
             {c.image_url && (
               <div className="relative w-40 h-24 bg-white border border-line rounded-xl p-1">
-                <img src={c.image_url} alt="" className="w-full h-full object-contain" />
+                <img
+                  src={c.image_url}
+                  alt=""
+                  onClick={() => onPreviewImage(c.image_url, c.title || 'Illustration')}
+                  title="اضغط للتكبير"
+                  className="w-full h-full object-contain cursor-zoom-in"
+                />
                 <button type="button" onClick={() => onUpdateContent({ image_url: '' })}
                         className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-rose-600 text-white text-[10px] flex items-center justify-center">✕</button>
               </div>
@@ -1006,7 +1014,13 @@ function BlockEditorCard({
               <div className="grid grid-cols-3 gap-2">
                 {c.panels.map((u: string, pi: number) => (
                   <div key={pi} className="relative bg-white border border-line rounded-xl p-1.5 h-24">
-                    <img src={u} alt="" className="w-full h-full object-contain" />
+                    <img
+                      src={u}
+                      alt=""
+                      onClick={() => onPreviewImage(u, `Image ${pi + 1}`)}
+                      title="اضغط للتكبير"
+                      className="w-full h-full object-contain cursor-zoom-in"
+                    />
                     <button type="button" onClick={() => onUpdateContent({ panels: c.panels.filter((_: string, i: number) => i !== pi) })}
                             className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-rose-600 text-white text-[10px]">✕</button>
                   </div>
