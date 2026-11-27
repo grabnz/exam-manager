@@ -465,13 +465,9 @@ export default function ExamPrint() {
             </tbody>
           </table>
 
-          <div className="grid grid-cols-2 gap-4 pt-2 text-xs text-gray-700">
+          <div className="pt-2 text-xs text-gray-700">
             <div className="border border-gray-400 rounded p-2.5 min-h-[52px]">
               <span className="font-bold">Observation de l’enseignant(e) :</span>
-            </div>
-            <div className="border border-gray-400 rounded p-2.5 min-h-[52px] flex flex-col justify-between">
-              <span className="font-bold">Signature du parent :</span>
-              <span className="text-[10px] text-gray-400 text-right">Date : ____ / ____ / 202__</span>
             </div>
           </div>
         </footer>
