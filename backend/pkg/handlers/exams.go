@@ -1085,7 +1085,9 @@ func (h *ExamsHandler) SearchIllustrations(w http.ResponseWriter, r *http.Reques
 }
 
 // GenerateIllustration dynamically generates a studio-grade Lofi Linear / Flat Art Adouci
-// French primary school illustration for ANY prompt using Gemini Image Generation (GEMINI_API_KEY).
+// French primary school illustration for ANY prompt using:
+// 1. Cloudflare Workers AI (@cf/black-forest-labs/flux-1-schnell) — FREE tier (10,000 neurons/day)
+// 2. Google Gemini Image (gemini-2.5-flash-image) — fallback if GEMINI_API_KEY is set
 func (h *ExamsHandler) GenerateIllustration(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Prompt string `json:"prompt"`
@@ -1095,18 +1097,44 @@ func (h *ExamsHandler) GenerateIllustration(w http.ResponseWriter, r *http.Reque
 		httpx.WriteError(w, http.StatusBadRequest, "الرجاء كتابة وصف المشهد المطلوب")
 		return
 	}
-	apiKey := strings.TrimSpace(os.Getenv("GEMINI_API_KEY"))
-	if apiKey == "" {
-		httpx.WriteError(w, http.StatusServiceUnavailable, "مفتاح GEMINI_API_KEY غير مفعّل بعد على الخادم (Vercel) — أضيفوه لتفعيل التوليد التلقائي للرسوم بأسلوب Lofi Linear.")
+	userPrompt := strings.TrimSpace(body.Prompt)
+
+	cfAccount := strings.TrimSpace(os.Getenv("CLOUDFLARE_ACCOUNT_ID"))
+	cfToken := strings.TrimSpace(os.Getenv("CLOUDFLARE_API_TOKEN"))
+	geminiKey := strings.TrimSpace(os.Getenv("GEMINI_API_KEY"))
+
+	if cfAccount == "" && cfToken == "" && geminiKey == "" {
+		httpx.WriteError(w, http.StatusServiceUnavailable, "أضيفوا CLOUDFLARE_ACCOUNT_ID و CLOUDFLARE_API_TOKEN (مجاني على Cloudflare Workers AI) في إعدادات Vercel لتفعيل التوليد التلقائي للرسوم.")
 		return
 	}
 
-	style := "Studio-quality children's book illustration in warm French editorial lofi linear / flat art adouci style: delicate clean dark charcoal ink outlines, gentle muted pastel colors (soft teal, warm cream, sage green, blush peach), cozy minimal shading, pure clean white background (#FFFFFF), zero text or letters, 4:3 framing for a French primary school worksheet."
+	style := "warm French editorial children's book illustration, lofi linear flat art adouci style, delicate clean dark charcoal ink outlines, gentle muted pastel colors (soft teal, warm cream, sage green, blush peach), cozy minimal shading, pure clean white background, zero text, no letters, no watermark"
 	if body.BW {
-		style = "Studio-quality black and white ink line-art illustration in warm French editorial lofi linear textbook style: delicate clean charcoal outlines on pure white (#FFFFFF) background, no grey background, photocopy-ready coloring-book style, zero text or letters, 4:3 framing for a French primary school worksheet."
+		style = "clean black and white ink line-art illustration, French primary school textbook coloring-book style, delicate clean charcoal outlines on pure white background, no grey background, photocopy-ready, zero text, no letters"
 	}
-	fullPrompt := style + " Scene: " + strings.TrimSpace(body.Prompt)
 
+	// 1. Prefer Cloudflare Workers AI (FLUX.1 Schnell — free tier!)
+	if cfAccount != "" && cfToken != "" {
+		sceneEn := translateToEnglishCF(cfAccount, cfToken, userPrompt)
+		fullPrompt := fmt.Sprintf("%s, %s", sceneEn, style)
+		dataURI, err := generateFluxCloudflare(cfAccount, cfToken, fullPrompt)
+		if err != nil {
+			httpx.WriteError(w, http.StatusBadGateway, "Cloudflare AI: "+err.Error())
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, illustrationSuggestion{
+			ID:         fmt.Sprintf("cf-%d", time.Now().UnixNano()),
+			Title:      userPrompt,
+			URL:        dataURI,
+			Source:     "lofi_ai",
+			PrintScore: 99,
+			Reasons:    []string{"Lofi Linear · FLUX.1 Schnell", "مجاني عبر Cloudflare AI"},
+		})
+		return
+	}
+
+	// 2. Fallback to Gemini Image (gemini-2.5-flash-image)
+	fullPrompt := style + ". Scene: " + userPrompt
 	payload := map[string]any{
 		"contents": []map[string]any{
 			{"parts": []map[string]any{{"text": fullPrompt}}},
@@ -1117,7 +1145,7 @@ func (h *ExamsHandler) GenerateIllustration(w http.ResponseWriter, r *http.Reque
 	}
 	rawReq, _ := json.Marshal(payload)
 
-	endpoint := "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=" + url.QueryEscape(apiKey)
+	endpoint := "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=" + url.QueryEscape(geminiKey)
 	client := &http.Client{Timeout: 35 * time.Second}
 	resp, err := client.Post(endpoint, "application/json", bytes.NewReader(rawReq))
 	if err != nil {
@@ -1159,7 +1187,7 @@ func (h *ExamsHandler) GenerateIllustration(w http.ResponseWriter, r *http.Reque
 				dataURI := fmt.Sprintf("data:%s;base64,%s", mt, part.InlineData.Data)
 				httpx.WriteJSON(w, http.StatusOK, illustrationSuggestion{
 					ID:         fmt.Sprintf("gen-%d", time.Now().UnixNano()),
-					Title:      strings.TrimSpace(body.Prompt),
+					Title:      userPrompt,
 					URL:        dataURI,
 					Source:     "lofi_ai",
 					PrintScore: 99,
@@ -1170,6 +1198,86 @@ func (h *ExamsHandler) GenerateIllustration(w http.ResponseWriter, r *http.Reque
 		}
 	}
 	httpx.WriteError(w, http.StatusBadGateway, "لم يتم إرجاع صورة من النموذج")
+}
+
+// translateToEnglishCF translates French or Arabic scene descriptions into clean English
+// using Cloudflare's free m2m100 model so FLUX.1 Schnell follows the scene accurately.
+func translateToEnglishCF(accountID, token, text string) string {
+	srcLang := "french"
+	for _, r := range text {
+		if r >= 0x0600 && r <= 0x06FF {
+			srcLang = "arabic"
+			break
+		}
+	}
+	body, _ := json.Marshal(map[string]string{
+		"text":        text,
+		"source_lang": srcLang,
+		"target_lang": "english",
+	})
+	endpoint := fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/ai/run/@cf/meta/m2m100-1.2b", url.PathEscape(accountID))
+	req, err := http.NewRequest("POST", endpoint, bytes.NewReader(body))
+	if err != nil {
+		return text
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	client := &http.Client{Timeout: 6 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil || resp.StatusCode != 200 {
+		return text
+	}
+	defer resp.Body.Close()
+	var out struct {
+		Result struct {
+			TranslatedText string `json:"translated_text"`
+		} `json:"result"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err == nil && strings.TrimSpace(out.Result.TranslatedText) != "" {
+		return strings.TrimSpace(out.Result.TranslatedText)
+	}
+	return text
+}
+
+func generateFluxCloudflare(accountID, token, prompt string) (string, error) {
+	body, _ := json.Marshal(map[string]any{
+		"prompt":    prompt,
+		"num_steps": 4,
+	})
+	endpoint := fmt.Sprintf("https://api.cloudflare.com/client/v4/accounts/%s/ai/run/@cf/black-forest-labs/flux-1-schnell", url.PathEscape(accountID))
+	req, err := http.NewRequest("POST", endpoint, bytes.NewReader(body))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 25 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	var cfResp struct {
+		Success bool `json:"success"`
+		Result  struct {
+			Image string `json:"image"`
+		} `json:"result"`
+		Errors []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&cfResp); err != nil {
+		return "", fmt.Errorf("invalid response (%d)", resp.StatusCode)
+	}
+	if !cfResp.Success || cfResp.Result.Image == "" {
+		if len(cfResp.Errors) > 0 {
+			return "", fmt.Errorf("%s", cfResp.Errors[0].Message)
+		}
+		return "", fmt.Errorf("status %d", resp.StatusCode)
+	}
+	return "data:image/jpeg;base64," + cfResp.Result.Image, nil
 }
 
 func searchArasaac(query string, bw bool) []illustrationSuggestion {
