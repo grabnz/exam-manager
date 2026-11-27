@@ -96,7 +96,7 @@ export default function ExamPrint() {
 
         {/* Render Blocks */}
         <div className="space-y-5">
-          {paper.blocks.map((b, idx) => {
+          {(Array.isArray(paper.blocks) ? paper.blocks : []).map((b, idx) => {
             const c = b.content ?? {}
             return (
               <section key={b.id} className="flex gap-3 items-start break-inside-avoid">

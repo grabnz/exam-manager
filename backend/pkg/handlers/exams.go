@@ -452,7 +452,7 @@ func extractBlocksFromPDF(data []byte) []map[string]any {
 	if len(clean) == 0 {
 		return nil
 	}
-	var blocks []map[string]any
+	blocks := make([]map[string]any, 0)
 	var cur []string
 	flush := func(sec, btype, crit string, pts float64) {
 		if len(cur) == 0 {
@@ -714,7 +714,7 @@ type scoredSuggestion struct {
 
 func scoreBlock(b db.QuestionBlock, level string, trimester int, moduleNum int, section string, criterion string, targetDiff string, currentYear string) (int, []string) {
 	score := 0.0
-	var reasons []string
+	reasons := make([]string, 0)
 
 	// 1. Level & Section match (35 pts)
 	if level == "" || strings.EqualFold(b.Level, level) {
@@ -812,7 +812,7 @@ func (h *ExamsHandler) SuggestBlocks(w http.ResponseWriter, r *http.Request) {
 	var rows []db.QuestionBlock
 	h.DB.Where("owner_id IS NULL OR owner_id = ?", u.ID).Find(&rows)
 
-	var scored []scoredSuggestion
+	scored := make([]scoredSuggestion, 0)
 	for _, b := range rows {
 		if excluded[b.ID] {
 			continue
@@ -946,7 +946,7 @@ func (h *ExamsHandler) GenerateExam(w http.ResponseWriter, r *http.Request) {
 	chosen = append(chosen, pickSection("langue", nil, 3)...)
 	chosen = append(chosen, pickSection("production", []string{"production_ecrite"}, 1)...)
 
-	var blocks []map[string]any
+	blocks := make([]map[string]any, 0, len(chosen))
 	totalPts := 0.0
 	for i, b := range chosen {
 		var content any
@@ -1041,7 +1041,7 @@ var builtinIllustrations = []struct {
 func (h *ExamsHandler) SearchIllustrations(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
 	qLow := strings.ToLower(q)
-	var results []illustrationSuggestion
+	results := make([]illustrationSuggestion, 0)
 
 	// 1. Score built-in offline crisp line-art SVGs (always instant & photocopy-perfect)
 	for _, item := range builtinIllustrations {

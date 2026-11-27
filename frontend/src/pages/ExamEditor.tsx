@@ -114,7 +114,9 @@ export default function ExamEditor() {
         exclude_ids: exclude,
         limit: 8,
       })
-      setSuggestions(res)
+      setSuggestions(Array.isArray(res) ? res : [])
+    } catch {
+      setSuggestions([])
     } finally {
       setLoadingSuggest(false)
     }
@@ -124,7 +126,9 @@ export default function ExamEditor() {
     setLoadingImg(true)
     try {
       const res = await api.illustrations.search(q)
-      setImgResults(res)
+      setImgResults(Array.isArray(res) ? res : [])
+    } catch {
+      setImgResults([])
     } finally {
       setLoadingImg(false)
     }
@@ -434,7 +438,7 @@ export default function ExamEditor() {
                       {s.block.content?.prompt || s.block.content?.title || s.block.topic}
                     </p>
                     <div className="flex flex-wrap gap-1">
-                      {s.reasons.map((r, ri) => (
+                      {(s.reasons ?? []).map((r, ri) => (
                         <span key={ri} className="arabic text-[10px] bg-surface border border-line text-ink-muted px-2 py-0.5 rounded-full">
                           {r}
                         </span>
