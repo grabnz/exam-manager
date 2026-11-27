@@ -670,17 +670,29 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt, bw, style }),
       }),
+    listSaved: () => req<IllustrationSuggestion[]>('/illustrations/saved'),
+    save: (data: { title: string; data_url: string; style?: string; is_bw?: boolean }) =>
+      req<IllustrationSuggestion>('/illustrations/saved', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }),
+    deleteSaved: (id: string) => req<{ ok: boolean }>(`/illustrations/saved/${id}`, { method: 'DELETE' }),
   },
 }
 
 export type ExamBlockType =
+  | 'section_header'
   | 'reading_text'
+  | 'reading_comprehension'
   | 'mcq'
   | 'true_false'
   | 'open_question'
   | 'fill_blanks'
   | 'scramble'
   | 'matching'
+  | 'table_fill'
+  | 'transformation'
   | 'production_ecrite'
 
 export interface ExamBlock {
@@ -759,7 +771,7 @@ export interface IllustrationSuggestion {
   id: string
   title: string
   url: string
-  source: 'builtin_svg' | 'arasaac' | 'lofi_ai'
+  source: 'builtin_svg' | 'arasaac' | 'lofi_ai' | 'saved'
   print_score: number
   reasons: string[]
 }

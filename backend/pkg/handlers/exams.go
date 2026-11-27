@@ -1119,7 +1119,7 @@ func (h *ExamsHandler) GenerateIllustration(w http.ResponseWriter, r *http.Reque
 		if cfWorkerSecret != "" {
 			req.Header.Set("X-AI-Secret", cfWorkerSecret)
 		}
-		client := &http.Client{Timeout: 30 * time.Second}
+		client := &http.Client{Timeout: 45 * time.Second}
 		resp, err := client.Do(req)
 		if err != nil {
 			httpx.WriteError(w, http.StatusBadGateway, "Cloudflare AI Worker: "+err.Error())
@@ -1138,13 +1138,14 @@ func (h *ExamsHandler) GenerateIllustration(w http.ResponseWriter, r *http.Reque
 			httpx.WriteError(w, http.StatusBadGateway, "Cloudflare AI: "+msg)
 			return
 		}
+		saved := h.persistIllustration(auth.UserFromContext(r.Context()).ID, userPrompt, body.Style, body.BW, wResp.Image)
 		httpx.WriteJSON(w, http.StatusOK, illustrationSuggestion{
-			ID:         fmt.Sprintf("cfw-%d", time.Now().UnixNano()),
-			Title:      userPrompt,
-			URL:        wResp.Image,
-			Source:     "lofi_ai",
+			ID:         saved.ID,
+			Title:      saved.Title,
+			URL:        saved.DataURL,
+			Source:     "saved",
 			PrintScore: 99,
-			Reasons:    []string{"Lofi Linear · FLUX.1 Schnell", "مجاني عبر Cloudflare AI"},
+			Reasons:    []string{"محفوظ في مكتبتك", "Lofi Linear · Lucid Origin"},
 		})
 		return
 	}
@@ -1324,6 +1325,88 @@ func generateFluxCloudflare(accountID, token, prompt string) (string, error) {
 		return "", fmt.Errorf("status %d", resp.StatusCode)
 	}
 	return "data:image/jpeg;base64," + cfResp.Result.Image, nil
+}
+
+// ── Saved Illustrations Gallery (persisted per teacher across refreshes) ────
+
+func (h *ExamsHandler) persistIllustration(ownerID, title, style string, isBW bool, dataURL string) db.SavedIllustration {
+	if style == "" {
+		style = "lofi_pastel"
+	}
+	row := db.SavedIllustration{
+		OwnerID: ownerID,
+		Title:   strings.TrimSpace(title),
+		Style:   style,
+		IsBW:    isBW,
+		DataURL: dataURL,
+	}
+	_ = h.DB.Create(&row).Error
+	return row
+}
+
+func (h *ExamsHandler) ListSavedIllustrations(w http.ResponseWriter, r *http.Request) {
+	u := auth.UserFromContext(r.Context())
+	var rows []db.SavedIllustration
+	q := h.DB.Model(&db.SavedIllustration{})
+	if u.Role != "admin" {
+		q = q.Where("owner_id = ?", u.ID)
+	}
+	q.Order("created_at DESC").Limit(40).Find(&rows)
+
+	out := make([]illustrationSuggestion, 0, len(rows))
+	for _, s := range rows {
+		out = append(out, illustrationSuggestion{
+			ID:         s.ID,
+			Title:      s.Title,
+			URL:        s.DataURL,
+			Source:     "saved",
+			PrintScore: 99,
+			Reasons:    []string{"محفوظ في مكتبتك"},
+		})
+	}
+	httpx.WriteJSON(w, http.StatusOK, out)
+}
+
+func (h *ExamsHandler) SaveIllustration(w http.ResponseWriter, r *http.Request) {
+	u := auth.UserFromContext(r.Context())
+	var body struct {
+		Title   string `json:"title"`
+		Style   string `json:"style"`
+		IsBW    bool   `json:"is_bw"`
+		DataURL string `json:"data_url"`
+	}
+	if err := httpx.DecodeJSON(r, &body); err != nil || strings.TrimSpace(body.DataURL) == "" {
+		httpx.WriteError(w, http.StatusBadRequest, "الصورة غير صالحة")
+		return
+	}
+	if strings.TrimSpace(body.Title) == "" {
+		body.Title = "Illustration sauvegardée"
+	}
+	saved := h.persistIllustration(u.ID, body.Title, body.Style, body.IsBW, body.DataURL)
+	httpx.WriteJSON(w, http.StatusCreated, illustrationSuggestion{
+		ID:         saved.ID,
+		Title:      saved.Title,
+		URL:        saved.DataURL,
+		Source:     "saved",
+		PrintScore: 99,
+		Reasons:    []string{"محفوظ في مكتبتك"},
+	})
+}
+
+func (h *ExamsHandler) DeleteSavedIllustration(w http.ResponseWriter, r *http.Request) {
+	u := auth.UserFromContext(r.Context())
+	id := r.PathValue("ill_id")
+	var row db.SavedIllustration
+	if err := h.DB.Where("id = ?", id).First(&row).Error; err != nil {
+		httpx.WriteError(w, http.StatusNotFound, "الرسم غير موجود")
+		return
+	}
+	if u.Role != "admin" && row.OwnerID != u.ID {
+		httpx.WriteError(w, http.StatusForbidden, "غير مسموح")
+		return
+	}
+	_ = h.DB.Delete(&row).Error
+	httpx.WriteJSON(w, http.StatusOK, map[string]bool{"ok": true})
 }
 
 func searchArasaac(query string, bw bool) []illustrationSuggestion {

@@ -19,10 +19,42 @@ function renderCloze(sentence: string, showKey: boolean) {
   })
 }
 
+function AnswerLines({ count, style }: { count: number; style: 'dotted' | 'seyes' }) {
+  return (
+    <div className={style === 'seyes' ? 'space-y-3 pt-1.5' : 'space-y-4 pt-2'}>
+      {Array.from({ length: Math.max(1, count) }).map((_, li) =>
+        style === 'seyes' ? (
+          <div key={li} className="space-y-1">
+            <div className="border-b border-sky-200 h-2" />
+            <div className="border-b border-sky-400 h-2" />
+          </div>
+        ) : (
+          <div key={li} className="border-b border-dotted border-gray-500 h-4" />
+        )
+      )}
+    </div>
+  )
+}
+
+function CriterionBox({ code, points }: { code: string; points: number }) {
+  if (!points || points <= 0) return null
+  return (
+    <div className="w-24 flex-shrink-0 border border-gray-800 rounded text-center text-[10px] overflow-hidden">
+      <div className="font-extrabold bg-gray-100 border-b border-gray-800 py-0.5">{code || 'C1'}</div>
+      <div className="grid grid-cols-4 divide-x divide-gray-300 border-b border-gray-300 py-0.5 text-[9px] text-gray-600">
+        <span>-</span><span>+</span><span>++</span><span>+++</span>
+      </div>
+      <div className="py-1 font-bold text-gray-800">…… / {points}</div>
+    </div>
+  )
+}
+
 export default function ExamPrint() {
   const { id } = useParams<{ id: string }>()
   const [sp] = useSearchParams()
   const [mode, setMode] = useState<'student' | 'key'>(sp.get('mode') === 'key' ? 'key' : 'student')
+  const [lineStyle, setLineStyle] = useState<'dotted' | 'seyes'>('dotted')
+  const [density, setDensity] = useState<'compact' | 'normal' | 'large'>('normal')
 
   const { data: paper } = useQuery<ExamPaper>({
     queryKey: ['exam', id],
@@ -36,16 +68,24 @@ export default function ExamPrint() {
 
   const blocks = useMemo(() => (Array.isArray(paper?.blocks) ? paper!.blocks : []), [paper])
 
-  // Aggregate official Tunisian criteria breakdown for the bottom Grille d'évaluation
+  // Aggregate official Tunisian criteria breakdown (including sub-questions of reading_comprehension!)
   const criteriaSummary = useMemo(() => {
     const map = new Map<string, number>()
     for (const b of blocks) {
+      if (b.type === 'reading_comprehension' && Array.isArray(b.content?.questions)) {
+        for (const q of b.content.questions) {
+          const pts = Number(q.points) || 0
+          if (pts <= 0) continue
+          const key = (q.criterion || 'C2').trim().toUpperCase()
+          map.set(key, +((map.get(key) ?? 0) + pts).toFixed(2))
+        }
+        continue
+      }
       if (!b.points || b.points <= 0) continue
       const key = (b.criterion || 'C1').trim().toUpperCase()
-      map.set(key, +( (map.get(key) ?? 0) + Number(b.points) ).toFixed(2))
+      map.set(key, +((map.get(key) ?? 0) + Number(b.points)).toFixed(2))
     }
     if (map.size === 0) {
-      // Default Tunisian French criteria skeleton even on a fresh/minimal exam
       return [
         { code: 'C1', label: 'Adéquation / Lecture', max: 4 },
         { code: 'C2', label: 'Compréhension',        max: 4 },
@@ -74,24 +114,40 @@ export default function ExamPrint() {
   if (!paper) return <div className="p-10 text-center text-gray-400">Chargement…</div>
 
   const showKey = mode === 'key'
+  const textSizeCls = density === 'compact' ? 'text-xs' : density === 'large' ? 'text-base' : 'text-sm'
+  const spacingCls = density === 'compact' ? 'space-y-3' : density === 'large' ? 'space-y-6' : 'space-y-4'
 
   return (
     <div className="min-h-screen bg-canvas py-6 px-4 print:bg-white print:p-0">
-      {/* Screen-only toolbar */}
-      <div className="max-w-[210mm] mx-auto mb-4 flex items-center justify-between gap-3 bg-surface border border-line rounded-2xl px-4 py-2.5 shadow-card print:hidden" dir="rtl">
-        <div className="inline-flex bg-canvas rounded-xl p-1">
-          <button onClick={() => setMode('student')}
-                  className={`arabic text-xs px-4 py-1.5 rounded-lg font-semibold transition ${
-                    !showKey ? 'bg-brand text-white' : 'text-ink-muted'
-                  }`}>
-            ورقة التلميذ (Feuille de l’élève)
-          </button>
-          <button onClick={() => setMode('key')}
-                  className={`arabic text-xs px-4 py-1.5 rounded-lg font-semibold transition ${
-                    showKey ? 'bg-emerald-600 text-white' : 'text-ink-muted'
-                  }`}>
-            ورقة الإصلاح (Corrigé)
-          </button>
+      {/* Screen-only adaptable print toolbar */}
+      <div className="max-w-[210mm] mx-auto mb-4 flex items-center justify-between gap-2 flex-wrap bg-surface border border-line rounded-2xl px-4 py-2.5 shadow-card print:hidden" dir="rtl">
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="inline-flex bg-canvas rounded-xl p-1">
+            <button onClick={() => setMode('student')}
+                    className={`arabic text-xs px-3 py-1.5 rounded-lg font-semibold transition ${!showKey ? 'bg-brand text-white' : 'text-ink-muted'}`}>
+              ورقة التلميذ
+            </button>
+            <button onClick={() => setMode('key')}
+                    className={`arabic text-xs px-3 py-1.5 rounded-lg font-semibold transition ${showKey ? 'bg-emerald-600 text-white' : 'text-ink-muted'}`}>
+              الإصلاح (Corrigé)
+            </button>
+          </div>
+          <div className="inline-flex bg-canvas rounded-xl p-1">
+            <button onClick={() => setLineStyle('dotted')}
+                    className={`arabic text-xs px-2.5 py-1 rounded-lg font-medium ${lineStyle === 'dotted' ? 'bg-surface text-brand shadow-sm' : 'text-ink-muted'}`}>
+              أسطر منقّطة
+            </button>
+            <button onClick={() => setLineStyle('seyes')}
+                    className={`arabic text-xs px-2.5 py-1 rounded-lg font-medium ${lineStyle === 'seyes' ? 'bg-surface text-brand shadow-sm' : 'text-ink-muted'}`}>
+              خطوط كراس (Seyès)
+            </button>
+          </div>
+          <select value={density} onChange={e => setDensity(e.target.value as any)}
+                  className="arabic bg-canvas border border-line rounded-xl px-2.5 py-1.5 text-xs font-medium">
+            <option value="compact">مضغوط (صفحة 1)</option>
+            <option value="normal">عادي</option>
+            <option value="large">كبير (سنة 3)</option>
+          </select>
         </div>
         <button onClick={() => window.print()}
                 className="arabic inline-flex items-center gap-1.5 text-xs bg-brand hover:bg-brand-hover text-white px-4 py-2 rounded-xl font-semibold">
@@ -102,7 +158,7 @@ export default function ExamPrint() {
       {/* Official A4 Sheet */}
       <article
         dir={paper.direction}
-        className="max-w-[210mm] mx-auto bg-white border border-gray-300 print:border-0 p-7 md:p-9 shadow-float print:shadow-none text-gray-900 space-y-5 overflow-hidden"
+        className={`max-w-[210mm] mx-auto bg-white border border-gray-300 print:border-0 p-7 md:p-9 shadow-float print:shadow-none text-gray-900 ${spacingCls} overflow-hidden`}
       >
         {/* Ministry-style Official Header */}
         <header className="border-2 border-gray-800 rounded-lg p-3.5 grid grid-cols-3 gap-3 text-xs">
@@ -136,18 +192,67 @@ export default function ExamPrint() {
           </div>
         </header>
 
-        {/* Render Blocks with Official Right-Margin Criteria Column */}
-        <div className="space-y-4">
+        {/* Render Blocks */}
+        <div className={spacingCls}>
           {blocks.map((b, idx) => {
             const c = b.content ?? {}
+
+            if (b.type === 'section_header') {
+              return (
+                <div key={b.id} className="border-b-2 border-gray-800 pb-1 pt-2 break-inside-avoid">
+                  <h2 className="text-sm font-extrabold uppercase tracking-wide text-gray-900">{c.heading}</h2>
+                  {c.subtitle && <p className="text-xs italic text-gray-600">{c.subtitle}</p>}
+                </div>
+              )
+            }
+
+            if (b.type === 'reading_comprehension') {
+              const lines = String(c.text ?? '').split('\n')
+              return (
+                <div key={b.id} className="space-y-3">
+                  <div className="border border-gray-400 rounded-lg p-4 bg-gray-50/40 space-y-2 overflow-hidden break-inside-avoid">
+                    {c.title && <h2 className="text-center font-bold text-base underline">{c.title}</h2>}
+                    <div className="flex gap-4 items-start">
+                      <div className={`flex-1 min-w-0 ${textSizeCls} leading-7 space-y-1`}>
+                        {c.numbered_lines ? lines.map((ln: string, li: number) => (
+                          <p key={li} className="flex gap-2 break-words">
+                            <span className="text-[10px] text-gray-400 w-4 flex-shrink-0 pt-1">{li + 1}</span>
+                            <span className="flex-1 min-w-0 break-words">{ln}</span>
+                          </p>
+                        )) : (
+                          <p className="whitespace-pre-line break-words">{c.text}</p>
+                        )}
+                      </div>
+                      {c.image_url && (
+                        <img src={c.image_url} alt="" className="w-40 h-28 object-contain border border-gray-200 rounded bg-white p-1 flex-shrink-0" />
+                      )}
+                    </div>
+                  </div>
+                  {(c.questions ?? []).map((q: any, qi: number) => (
+                    <section key={qi} className="flex gap-3 items-start break-inside-avoid">
+                      <div className={`flex-1 min-w-0 ${textSizeCls} space-y-1`}>
+                        <p className="font-bold break-words">{qi + 1}. {q.prompt}</p>
+                        {showKey && q.answer ? (
+                          <p className="pl-4 text-rose-700 font-semibold italic break-words">{q.answer}</p>
+                        ) : (
+                          <div className="pl-4"><AnswerLines count={q.lines || 2} style={lineStyle} /></div>
+                        )}
+                      </div>
+                      <CriterionBox code={q.criterion || 'C2'} points={Number(q.points) || 0} />
+                    </section>
+                  ))}
+                </div>
+              )
+            }
+
             return (
               <section key={b.id} className="flex gap-3 items-start break-inside-avoid">
-                <div className="flex-1 min-w-0 space-y-2">
+                <div className={`flex-1 min-w-0 space-y-2 ${textSizeCls}`}>
                   {b.type === 'reading_text' && (
                     <div className="border border-gray-400 rounded-lg p-4 bg-gray-50/40 space-y-2 overflow-hidden">
                       {c.title && <h2 className="text-center font-bold text-base underline">{c.title}</h2>}
                       <div className="flex gap-4 items-start">
-                        <p className="flex-1 min-w-0 text-sm leading-7 whitespace-pre-line break-words">{c.text}</p>
+                        <p className="flex-1 min-w-0 leading-7 whitespace-pre-line break-words">{c.text}</p>
                         {c.image_url && (
                           <img src={c.image_url} alt="" className="w-40 h-28 object-contain border border-gray-200 rounded bg-white p-1 flex-shrink-0" />
                         )}
@@ -157,7 +262,7 @@ export default function ExamPrint() {
                   )}
 
                   {b.type === 'mcq' && (
-                    <div className="space-y-1.5 text-sm">
+                    <div className="space-y-1.5">
                       <p className="font-bold break-words">{idx + 1}. {c.prompt}</p>
                       <div className="pl-4 space-y-1">
                         {(c.options ?? []).map((opt: string, oi: number) => (
@@ -173,7 +278,7 @@ export default function ExamPrint() {
                   )}
 
                   {b.type === 'true_false' && (
-                    <div className="space-y-1.5 text-sm">
+                    <div className="space-y-1.5">
                       <p className="font-bold break-words">{idx + 1}. {c.prompt}</p>
                       <div className="pl-4 space-y-1">
                         {(c.items ?? []).map((it: { statement: string; answer: boolean }, ii: number) => (
@@ -189,22 +294,18 @@ export default function ExamPrint() {
                   )}
 
                   {b.type === 'open_question' && (
-                    <div className="space-y-1.5 text-sm">
+                    <div className="space-y-1.5">
                       <p className="font-bold break-words">{idx + 1}. {c.prompt}</p>
                       {showKey && c.answer ? (
                         <p className="pl-4 text-rose-700 font-semibold italic break-words">{c.answer}</p>
                       ) : (
-                        <div className="pl-4 space-y-4 pt-2">
-                          {Array.from({ length: c.lines || 2 }).map((_, li) => (
-                            <div key={li} className="border-b border-dotted border-gray-500 h-4" />
-                          ))}
-                        </div>
+                        <div className="pl-4"><AnswerLines count={c.lines || 2} style={lineStyle} /></div>
                       )}
                     </div>
                   )}
 
                   {b.type === 'fill_blanks' && (
-                    <div className="space-y-1.5 text-sm">
+                    <div className="space-y-1.5">
                       <p className="font-bold break-words">{idx + 1}. {c.prompt}</p>
                       <div className="pl-4 space-y-1.5">
                         {(c.sentences ?? []).filter(Boolean).map((s: string, si: number) => (
@@ -214,20 +315,64 @@ export default function ExamPrint() {
                     </div>
                   )}
 
+                  {b.type === 'table_fill' && (
+                    <div className="space-y-2">
+                      <p className="font-bold break-words">{idx + 1}. {c.prompt}</p>
+                      <table className="w-full text-xs border-collapse border border-gray-700">
+                        <thead>
+                          <tr className="bg-gray-100">
+                            {(c.headers ?? []).map((h: string, hi: number) => (
+                              <th key={hi} className="border border-gray-700 px-2.5 py-1.5 text-center font-bold">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {(c.rows ?? []).map((row: string[], ri: number) => (
+                            <tr key={ri}>
+                              {row.map((cell: string, ci: number) => (
+                                <td key={ci} className="border border-gray-700 px-2.5 py-2 text-center">
+                                  {renderCloze(cell, showKey)}
+                                </td>
+                              ))}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+
+                  {b.type === 'transformation' && (
+                    <div className="space-y-2">
+                      <p className="font-bold break-words">{idx + 1}. {c.prompt}</p>
+                      <div className="pl-4 space-y-2.5">
+                        {(c.items ?? []).map((it: any, ii: number) => (
+                          <div key={ii} className="space-y-1">
+                            <p className="break-words">• {it.source}</p>
+                            {showKey && it.answer ? (
+                              <p className="pl-3 text-rose-700 font-semibold break-words">→ {it.answer}</p>
+                            ) : (
+                              <div className="pl-3"><AnswerLines count={it.lines || 2} style={lineStyle} /></div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {b.type === 'scramble' && (
-                    <div className="space-y-1.5 text-sm">
+                    <div className="space-y-1.5">
                       <p className="font-bold break-words">{idx + 1}. {c.prompt}</p>
                       <p className="pl-4 font-medium tracking-wide break-words">{(c.chunks ?? []).join('  /  ')}</p>
                       {showKey ? (
                         <p className="pl-4 text-rose-700 font-bold break-words">→ {c.answer}</p>
                       ) : (
-                        <div className="pl-4 pt-2"><div className="border-b border-dotted border-gray-500 h-5" /></div>
+                        <div className="pl-4"><AnswerLines count={1} style={lineStyle} /></div>
                       )}
                     </div>
                   )}
 
                   {b.type === 'matching' && (
-                    <div className="space-y-1.5 text-sm">
+                    <div className="space-y-1.5">
                       <p className="font-bold break-words">{idx + 1}. {c.prompt}</p>
                       <div className="pl-4 grid grid-cols-2 gap-x-10 gap-y-2 max-w-lg">
                         {(c.pairs ?? []).map((pr: { left: string; right: string }, pi: number) => (
@@ -245,7 +390,7 @@ export default function ExamPrint() {
                   )}
 
                   {b.type === 'production_ecrite' && (
-                    <div className="space-y-3 text-sm border-t-2 border-gray-800 pt-3">
+                    <div className="space-y-3 border-t-2 border-gray-800 pt-3">
                       <p className="font-bold uppercase text-xs tracking-wider text-gray-600">Production Écrite</p>
                       <p className="font-bold break-words">{c.prompt}</p>
                       {Array.isArray(c.panels) && c.panels.length > 0 && (
@@ -268,26 +413,13 @@ export default function ExamPrint() {
                       {showKey && c.model_answer ? (
                         <p className="text-rose-700 font-medium italic bg-rose-50/50 border border-rose-200 rounded p-3 break-words">{c.model_answer}</p>
                       ) : (
-                        <div className="space-y-5 pt-2">
-                          {Array.from({ length: c.lines || 6 }).map((_, li) => (
-                            <div key={li} className="border-b border-gray-400 h-4" />
-                          ))}
-                        </div>
+                        <AnswerLines count={c.lines || 6} style={lineStyle} />
                       )}
                     </div>
                   )}
                 </div>
 
-                {/* Official Tunisian Criterion + Mastery Margin Box */}
-                {b.points > 0 && (
-                  <div className="w-24 flex-shrink-0 border border-gray-800 rounded text-center text-[10px] overflow-hidden">
-                    <div className="font-extrabold bg-gray-100 border-b border-gray-800 py-0.5">{b.criterion}</div>
-                    <div className="grid grid-cols-4 divide-x divide-gray-300 border-b border-gray-300 py-0.5 text-[9px] text-gray-600">
-                      <span>-</span><span>+</span><span>++</span><span>+++</span>
-                    </div>
-                    <div className="py-1 font-bold text-gray-800">…… / {b.points}</div>
-                  </div>
-                )}
+                <CriterionBox code={b.criterion} points={b.points} />
               </section>
             )
           })}

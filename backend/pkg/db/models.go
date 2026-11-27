@@ -467,3 +467,22 @@ func (q *QuestionBlock) BeforeCreate(_ *gorm.DB) error {
 	}
 	return nil
 }
+
+// SavedIllustration persists AI-generated or teacher-uploaded school illustrations
+// so they are never lost on page refresh and can be reused across any exam.
+type SavedIllustration struct {
+	ID        string    `gorm:"primaryKey;type:text"`
+	OwnerID   string    `gorm:"not null;index"`
+	Title     string    `gorm:"not null"`
+	Style     string    `gorm:"default:'lofi_pastel'"`
+	IsBW      bool      `gorm:"not null;default:false"`
+	DataURL   string    `gorm:"type:text;not null"`
+	CreatedAt time.Time `gorm:"autoCreateTime"`
+}
+
+func (s *SavedIllustration) BeforeCreate(_ *gorm.DB) error {
+	if s.ID == "" {
+		s.ID = newID()
+	}
+	return nil
+}

@@ -13,14 +13,18 @@ import {
 import { getModuleInfo, getModulesForLevel } from '../lib/tunisianFrenchProgram'
 
 const BLOCK_CATALOG: { type: ExamBlockType; section: 'lecture' | 'langue' | 'production'; label: string; crit: string; pts: number }[] = [
-  { type: 'reading_text',      section: 'lecture',    label: 'Texte de lecture',       crit: 'C1', pts: 0 },
-  { type: 'mcq',               section: 'lecture',    label: 'QCM (Je coche)',         crit: 'C2', pts: 2 },
-  { type: 'true_false',        section: 'lecture',    label: 'Vrai / Faux',            crit: 'C2', pts: 3 },
-  { type: 'open_question',     section: 'lecture',    label: 'Question ouverte',       crit: 'C4', pts: 2 },
-  { type: 'fill_blanks',       section: 'langue',     label: 'Texte à trous (Cloze)',  crit: 'C5', pts: 3 },
-  { type: 'scramble',          section: 'langue',     label: 'Remets en ordre',        crit: 'C3', pts: 2 },
-  { type: 'matching',          section: 'langue',     label: 'Je relie (Matching)',    crit: 'C5', pts: 2 },
-  { type: 'production_ecrite', section: 'production', label: 'Production Écrite',      crit: 'C1', pts: 6 },
+  { type: 'section_header',        section: 'lecture',    label: 'Titre de section',         crit: '',   pts: 0 },
+  { type: 'reading_comprehension', section: 'lecture',    label: 'Texte + Questions',        crit: 'C1', pts: 6 },
+  { type: 'reading_text',          section: 'lecture',    label: 'Texte seul',               crit: 'C1', pts: 0 },
+  { type: 'mcq',                   section: 'lecture',    label: 'QCM (Je coche)',           crit: 'C2', pts: 2 },
+  { type: 'true_false',            section: 'lecture',    label: 'Vrai / Faux',              crit: 'C2', pts: 3 },
+  { type: 'open_question',         section: 'lecture',    label: 'Question ouverte',         crit: 'C4', pts: 2 },
+  { type: 'fill_blanks',           section: 'langue',     label: 'Texte à trous (Cloze)',    crit: 'C5', pts: 3 },
+  { type: 'table_fill',            section: 'langue',     label: 'Tableau à compléter',      crit: 'C5', pts: 3 },
+  { type: 'transformation',        section: 'langue',     label: 'Réécriture / Transf.',     crit: 'C5', pts: 3 },
+  { type: 'scramble',              section: 'langue',     label: 'Remets en ordre',          crit: 'C3', pts: 2 },
+  { type: 'matching',              section: 'langue',     label: 'Je relie (Matching)',      crit: 'C5', pts: 2 },
+  { type: 'production_ecrite',     section: 'production', label: 'Production Écrite',        crit: 'C1', pts: 6 },
 ]
 
 const CLOZE_PRESETS = [
@@ -33,8 +37,39 @@ const CLOZE_PRESETS = [
 
 function defaultContent(type: ExamBlockType): Record<string, any> {
   switch (type) {
+    case 'section_header':
+      return { heading: 'I. LECTURE — COMPRÉHENSION', subtitle: 'Je lis attentivement le texte puis je réponds aux questions.' }
+    case 'reading_comprehension':
+      return {
+        title: 'Titre du texte',
+        text: 'Ce matin, les élèves arrivent à l’école avec le sourire…',
+        source: '',
+        image_url: '',
+        numbered_lines: true,
+        questions: [
+          { prompt: 'Où se passe cette histoire ?', criterion: 'C2', points: 2, lines: 2, answer: 'À l’école.' },
+          { prompt: 'Pourquoi les élèves sont-ils heureux ? Je relève la phrase du texte.', criterion: 'C4', points: 2, lines: 2, answer: '' },
+        ],
+      }
     case 'reading_text':
-      return { title: 'Titre du texte', text: '', source: '', image_url: '' }
+      return { title: 'Titre du texte', text: '', source: '', image_url: '', numbered_lines: false }
+    case 'table_fill':
+      return {
+        prompt: 'Je complète le tableau suivant :',
+        headers: ['Infinitif', 'Présent (Je)', 'Futur (Nous)'],
+        rows: [
+          ['chanter', '[chante]', '[chanterons]'],
+          ['finir', '[finis]', '[finirons]'],
+        ],
+      }
+    case 'transformation':
+      return {
+        prompt: 'Je réécris les phrases au pluriel :',
+        items: [
+          { source: 'Le petit oiseau chante sur la branche.', lines: 2, answer: 'Les petits oiseaux chantent sur la branche.' },
+          { source: 'L’élève prépare son cartable.', lines: 2, answer: 'Les élèves préparent leurs cartables.' },
+        ],
+      }
     case 'mcq':
       return { prompt: 'Je coche la bonne réponse :', options: ['Option 1', 'Option 2', 'Option 3'], answer_index: 0 }
     case 'true_false':
@@ -90,10 +125,12 @@ export default function ExamEditor() {
   const [imgBW, setImgBW] = useState(false)
   const [imgStyle, setImgStyle] = useState<'lofi_pastel' | 'ligne_claire'>('lofi_pastel')
   const [imgResults, setImgResults] = useState<IllustrationSuggestion[]>([])
+  const [savedImgs, setSavedImgs] = useState<IllustrationSuggestion[]>([])
   const [loadingImg, setLoadingImg] = useState(false)
   const [generatingImg, setGeneratingImg] = useState(false)
   const [previewImg, setPreviewImg] = useState<IllustrationSuggestion | null>(null)
   const [activeImageTarget, setActiveImageTarget] = useState<string | null>(null) // block id
+  const [hydrated, setHydrated] = useState(false)
 
   const levelModules = useMemo(() => getModulesForLevel(level), [level])
   const activeModule = useMemo(() => getModuleInfo(level, moduleNum), [level, moduleNum])
@@ -107,6 +144,7 @@ export default function ExamEditor() {
     setModuleNum(paper.module_num)
     setExamType(paper.exam_type)
     setBlocks(Array.isArray(paper.blocks) ? paper.blocks : [])
+    setHydrated(true)
   }, [paper])
 
   const loadSuggestions = async (sec = suggestSec) => {
@@ -142,6 +180,15 @@ export default function ExamEditor() {
     }
   }
 
+  const loadSavedImgs = async () => {
+    try {
+      const res = await api.illustrations.listSaved()
+      setSavedImgs(Array.isArray(res) ? res : [])
+    } catch {
+      setSavedImgs([])
+    }
+  }
+
   const generateLofiImage = async (promptText: string) => {
     const clean = promptText.trim()
     if (!clean) {
@@ -151,7 +198,7 @@ export default function ExamEditor() {
     setGeneratingImg(true)
     try {
       const res = await api.illustrations.generate(clean, imgBW, imgStyle)
-      setImgResults(prev => [res, ...prev.filter(x => x.id !== res.id)])
+      setSavedImgs(prev => [res, ...prev.filter(x => x.id !== res.id)])
       setPreviewImg(res)
     } catch (err: any) {
       ui.toast(err.message || 'تعذّر توليد الرسم', 'error')
@@ -164,14 +211,41 @@ export default function ExamEditor() {
     if (paper) {
       void loadSuggestions('')
       void searchImages('', false)
+      void loadSavedImgs()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paper?.id])
 
+  // Debounced auto-save so refreshing the page never loses edits
+  useEffect(() => {
+    if (!hydrated || !id) return
+    const timer = setTimeout(() => {
+      void api.exams.update(id, {
+        title,
+        school_year: schoolYear,
+        level,
+        trimester,
+        module_num: moduleNum,
+        exam_type: examType,
+        direction: 'ltr',
+        blocks,
+        total_points: pointsSummary.total || 20,
+      }).then(() => {
+        setSavedFlag(true)
+        setTimeout(() => setSavedFlag(false), 1400)
+      }).catch(() => {})
+    }, 1800)
+    return () => clearTimeout(timer)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [title, schoolYear, level, trimester, moduleNum, examType, blocks])
+
   const pointsSummary = useMemo(() => {
     let lecture = 0, langue = 0, production = 0
     for (const b of blocks) {
-      const p = Number(b.points) || 0
+      let p = Number(b.points) || 0
+      if (b.type === 'reading_comprehension' && Array.isArray(b.content?.questions)) {
+        p = b.content.questions.reduce((s: number, q: any) => s + (Number(q.points) || 0), 0)
+      }
       if (b.section === 'lecture') lecture += p
       else if (b.section === 'langue') langue += p
       else production += p
@@ -234,12 +308,13 @@ export default function ExamEditor() {
   }
 
   function insertIllustration(url: string) {
-    // Insert into active target block, or first reading_text / production_ecrite block
+    // Insert into active target block, or first reading_comprehension / reading_text / production_ecrite block
     const target = blocks.find(b => b.id === activeImageTarget)
+      ?? blocks.find(b => b.type === 'reading_comprehension')
       ?? blocks.find(b => b.type === 'production_ecrite')
       ?? blocks.find(b => b.type === 'reading_text')
     if (!target) {
-      ui.toast('أضيفوا أولاً «Texte de lecture» أو «Production Écrite» لإدراج الرسم', 'info')
+      ui.toast('أضيفوا أولاً «Texte + Questions» أو «Production Écrite» لإدراج الرسم', 'info')
       return
     }
     if (target.type === 'production_ecrite') {
@@ -616,7 +691,21 @@ export default function ExamEditor() {
                       const f = e.target.files?.[0]
                       if (!f) return
                       const reader = new FileReader()
-                      reader.onload = () => { if (typeof reader.result === 'string') insertIllustration(reader.result) }
+                      reader.onload = async () => {
+                        if (typeof reader.result !== 'string') return
+                        try {
+                          const saved = await api.illustrations.save({
+                            title: f.name.replace(/\.[^.]+$/, ''),
+                            data_url: reader.result,
+                            is_bw: imgBW,
+                          })
+                          setSavedImgs(prev => [saved, ...prev])
+                          setPreviewImg(saved)
+                          ui.toast('تم حفظ الصورة في مكتبتك الدائمة', 'success')
+                        } catch {
+                          insertIllustration(reader.result)
+                        }
+                      }
                       reader.readAsDataURL(f)
                       e.target.value = ''
                     }}
@@ -640,7 +729,41 @@ export default function ExamEditor() {
                 </div>
               )}
 
-              <div className="grid grid-cols-2 gap-2 max-h-[54vh] overflow-y-auto pl-1">
+              {/* Saved Personal Illustrations Gallery (persisted across refreshes!) */}
+              {savedImgs.length > 0 && (
+                <div className="space-y-1.5">
+                  <p className="arabic text-[11px] font-bold text-brand">رسومي المحفوظة ({savedImgs.length}) — لا تضيع عند التحديث:</p>
+                  <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pl-1">
+                    {savedImgs.map(img => (
+                      <div key={img.id} className="relative bg-brand-light/40 border border-brand-mid rounded-2xl p-1.5 group">
+                        <button
+                          type="button"
+                          onClick={() => setPreviewImg(img)}
+                          className="w-full text-right space-y-1"
+                        >
+                          <div className="bg-white rounded-xl border border-line h-20 flex items-center justify-center overflow-hidden p-1">
+                            <img src={img.url} alt={img.title} className="max-h-full max-w-full object-contain" />
+                          </div>
+                          <p className="text-[10px] text-ink font-semibold truncate" dir="ltr">{img.title}</p>
+                        </button>
+                        <button
+                          type="button"
+                          title="حذف من مكتبتي"
+                          onClick={async () => {
+                            await api.illustrations.deleteSaved(img.id)
+                            setSavedImgs(prev => prev.filter(x => x.id !== img.id))
+                          }}
+                          className="absolute top-1 left-1 w-5 h-5 rounded-full bg-rose-600 text-white text-[10px] opacity-0 group-hover:opacity-100 transition flex items-center justify-center"
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2 max-h-[44vh] overflow-y-auto pl-1">
                 {imgResults.map(img => (
                   <button
                     key={img.id}
@@ -725,7 +848,7 @@ export default function ExamEditor() {
               >
                 <CheckIcon className="w-4 h-4" /> إدراج في الامتحان
               </button>
-              {previewImg.source === 'lofi_ai' && (
+              {(previewImg.source === 'lofi_ai' || previewImg.source === 'saved') && (
                 <button
                   type="button"
                   disabled={generatingImg}
@@ -734,6 +857,27 @@ export default function ExamEditor() {
                 >
                   <RefreshCwIcon className={`w-3.5 h-3.5 ${generatingImg ? 'animate-spin' : ''}`} />
                   <span>{generatingImg ? 'جاري التوليد…' : 'نسخة أخرى'}</span>
+                </button>
+              )}
+              {previewImg.source !== 'saved' && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    try {
+                      const saved = await api.illustrations.save({
+                        title: previewImg.title,
+                        data_url: previewImg.url,
+                        is_bw: imgBW,
+                      })
+                      setSavedImgs(prev => [saved, ...prev.filter(x => x.id !== saved.id)])
+                      ui.toast('تم حفظ الرسم في مكتبتك الدائمة', 'success')
+                    } catch {
+                      ui.toast('تعذّر الحفظ', 'error')
+                    }
+                  }}
+                  className="arabic px-4 py-2.5 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-800 rounded-xl text-xs font-semibold transition"
+                >
+                  حفظ في مكتبتي
                 </button>
               )}
               <button
@@ -814,6 +958,189 @@ function BlockEditorCard({
 
       {/* Block-specific French editors (LTR) */}
       <div dir="ltr" className="space-y-2.5 text-left">
+        {block.type === 'section_header' && (
+          <div className="space-y-2">
+            <input value={c.heading ?? ''} onChange={e => onUpdateContent({ heading: e.target.value })}
+                   placeholder="I. LECTURE — COMPRÉHENSION"
+                   className="w-full bg-brand-light/40 border border-brand-mid rounded-xl px-3 py-2 text-sm font-extrabold text-brand uppercase" />
+            <input value={c.subtitle ?? ''} onChange={e => onUpdateContent({ subtitle: e.target.value })}
+                   placeholder="Consigne générale (optionnel)"
+                   className="w-full bg-canvas border border-line rounded-xl px-3 py-1.5 text-xs text-ink-muted" />
+          </div>
+        )}
+
+        {block.type === 'reading_comprehension' && (
+          <div className="space-y-3">
+            <div className="flex gap-2 flex-wrap items-center">
+              <input value={c.title ?? ''} onChange={e => onUpdateContent({ title: e.target.value })}
+                     placeholder="Titre du texte"
+                     className="flex-1 bg-canvas border border-line rounded-xl px-3 py-2 text-sm font-bold" />
+              <label className="text-xs text-ink-muted flex items-center gap-1 cursor-pointer">
+                <input type="checkbox" checked={!!c.numbered_lines} onChange={e => onUpdateContent({ numbered_lines: e.target.checked })} className="accent-brand" />
+                Lignes numérotées
+              </label>
+              <button type="button" onClick={onSelectImgTarget}
+                      className="arabic inline-flex items-center gap-1 text-xs bg-brand-light text-brand px-3 py-2 rounded-xl font-semibold">
+                <ImageIcon className="w-3.5 h-3.5" /> إضافة رسم
+              </button>
+            </div>
+            {c.image_url && (
+              <div className="relative w-40 h-24 bg-white border border-line rounded-xl p-1">
+                <img src={c.image_url} alt="" onClick={() => onPreviewImage(c.image_url, c.title || 'Texte')} className="w-full h-full object-contain cursor-zoom-in" />
+                <button type="button" onClick={() => onUpdateContent({ image_url: '' })}
+                        className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-rose-600 text-white text-[10px]">✕</button>
+              </div>
+            )}
+            <textarea rows={4} value={c.text ?? ''} onChange={e => onUpdateContent({ text: e.target.value })}
+                      placeholder="Texte de lecture…"
+                      className="w-full bg-canvas border border-line rounded-xl px-3 py-2 text-sm leading-relaxed" />
+
+            {/* Sub-questions with individual response space & criteria */}
+            <div className="space-y-2 pt-2 border-t border-line">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-brand">Questions de compréhension (avec espace de réponse)</span>
+                <button
+                  type="button"
+                  onClick={() => onUpdateContent({
+                    questions: [...(c.questions ?? []), { prompt: 'Nouvelle question ?', criterion: 'C2', points: 2, lines: 2, answer: '' }],
+                  })}
+                  className="text-xs bg-brand-light text-brand px-2.5 py-1 rounded-lg font-semibold"
+                >
+                  + Question
+                </button>
+              </div>
+              {(c.questions ?? []).map((q: any, qi: number) => (
+                <div key={qi} className="bg-canvas/70 border border-line rounded-2xl p-3 space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-ink-muted">{qi + 1}.</span>
+                    <input
+                      value={q.prompt}
+                      onChange={e => {
+                        const next = [...(c.questions ?? [])]; next[qi] = { ...q, prompt: e.target.value }; onUpdateContent({ questions: next })
+                      }}
+                      className="flex-1 bg-surface border border-line rounded-lg px-2.5 py-1 text-sm font-medium"
+                    />
+                    <input
+                      value={q.criterion ?? 'C2'}
+                      onChange={e => {
+                        const next = [...(c.questions ?? [])]; next[qi] = { ...q, criterion: e.target.value }; onUpdateContent({ questions: next })
+                      }}
+                      className="w-12 bg-surface border border-line rounded-lg px-1.5 py-1 text-xs text-center font-bold"
+                    />
+                    <input
+                      type="number" min={0} max={10} step={0.5}
+                      value={q.points ?? 2}
+                      onChange={e => {
+                        const next = [...(c.questions ?? [])]; next[qi] = { ...q, points: Number(e.target.value) }; onUpdateContent({ questions: next })
+                      }}
+                      className="w-12 bg-surface border border-line rounded-lg px-1.5 py-1 text-xs text-center font-bold num"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onUpdateContent({ questions: (c.questions ?? []).filter((_: any, i: number) => i !== qi) })}
+                      className="text-xs text-ink-subtle hover:text-rose-600 px-1"
+                    >✕</button>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={q.answer ?? ''}
+                      onChange={e => {
+                        const next = [...(c.questions ?? [])]; next[qi] = { ...q, answer: e.target.value }; onUpdateContent({ questions: next })
+                      }}
+                      placeholder="Réponse attendue (Corrigé)"
+                      className="flex-1 bg-emerald-50/60 border border-emerald-200 rounded-lg px-2.5 py-1 text-xs"
+                    />
+                    <label className="text-[11px] text-ink-muted flex items-center gap-1">
+                      Lignes:
+                      <input
+                        type="number" min={1} max={6}
+                        value={q.lines ?? 2}
+                        onChange={e => {
+                          const next = [...(c.questions ?? [])]; next[qi] = { ...q, lines: Number(e.target.value) }; onUpdateContent({ questions: next })
+                        }}
+                        className="w-11 bg-surface border border-line rounded px-1 py-0.5 text-center num"
+                      />
+                    </label>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {block.type === 'table_fill' && (
+          <div className="space-y-2">
+            <input value={c.prompt ?? ''} onChange={e => onUpdateContent({ prompt: e.target.value })}
+                   className="w-full bg-canvas border border-line rounded-xl px-3 py-1.5 text-sm font-semibold" />
+            <p className="text-[11px] text-ink-subtle">Astuce : mettez les réponses entre crochets <code className="font-mono">[chante]</code> pour créer des cases vides pour l’élève.</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr>
+                    {(c.headers ?? []).map((h: string, hi: number) => (
+                      <th key={hi} className="border border-line p-1 bg-canvas">
+                        <input value={h} onChange={e => {
+                          const next = [...(c.headers ?? [])]; next[hi] = e.target.value; onUpdateContent({ headers: next })
+                        }} className="w-full bg-transparent font-bold text-center focus:outline-none" />
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {(c.rows ?? []).map((row: string[], ri: number) => (
+                    <tr key={ri}>
+                      {row.map((cell: string, ci: number) => (
+                        <td key={ci} className="border border-line p-1">
+                          <input value={cell} onChange={e => {
+                            const next = (c.rows ?? []).map((r: string[], i: number) => i === ri ? r.map((v, j) => j === ci ? e.target.value : v) : r)
+                            onUpdateContent({ rows: next })
+                          }} className="w-full bg-transparent text-center focus:outline-none font-mono" />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <button
+              type="button"
+              onClick={() => onUpdateContent({ rows: [...(c.rows ?? []), (c.headers ?? ['A', 'B', 'C']).map(() => '')] })}
+              className="text-xs bg-brand-light text-brand px-2.5 py-1 rounded-lg font-semibold"
+            >
+              + Ligne
+            </button>
+          </div>
+        )}
+
+        {block.type === 'transformation' && (
+          <div className="space-y-2">
+            <input value={c.prompt ?? ''} onChange={e => onUpdateContent({ prompt: e.target.value })}
+                   className="w-full bg-canvas border border-line rounded-xl px-3 py-1.5 text-sm font-semibold" />
+            {(c.items ?? []).map((it: any, ii: number) => (
+              <div key={ii} className="bg-canvas/70 border border-line rounded-xl p-2.5 space-y-1.5">
+                <div className="flex gap-2">
+                  <input value={it.source} onChange={e => {
+                    const next = [...(c.items ?? [])]; next[ii] = { ...it, source: e.target.value }; onUpdateContent({ items: next })
+                  }} placeholder="Phrase de départ" className="flex-1 bg-surface border border-line rounded-lg px-2.5 py-1 text-sm" />
+                  <input type="number" min={1} max={4} value={it.lines ?? 2} onChange={e => {
+                    const next = [...(c.items ?? [])]; next[ii] = { ...it, lines: Number(e.target.value) }; onUpdateContent({ items: next })
+                  }} title="Lignes de réponse" className="w-12 bg-surface border border-line rounded-lg px-1.5 py-1 text-xs text-center num" />
+                </div>
+                <input value={it.answer ?? ''} onChange={e => {
+                  const next = [...(c.items ?? [])]; next[ii] = { ...it, answer: e.target.value }; onUpdateContent({ items: next })
+                }} placeholder="Phrase transformée (Corrigé)" className="w-full bg-emerald-50/60 border border-emerald-200 rounded-lg px-2.5 py-1 text-xs" />
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => onUpdateContent({ items: [...(c.items ?? []), { source: '', lines: 2, answer: '' }] })}
+              className="text-xs bg-brand-light text-brand px-2.5 py-1 rounded-lg font-semibold"
+            >
+              + Phrase
+            </button>
+          </div>
+        )}
+
         {block.type === 'reading_text' && (
           <>
             <div className="flex gap-2">

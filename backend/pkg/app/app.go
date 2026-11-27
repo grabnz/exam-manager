@@ -165,6 +165,9 @@ func New() (http.Handler, error) {
 	mux.HandleFunc("POST /api/question-bank/{block_id}/feedback", requireUser(examsH.RecordFeedback))
 	mux.HandleFunc("GET /api/illustrations/search", requireUser(examsH.SearchIllustrations))
 	mux.HandleFunc("POST /api/illustrations/generate", requireUser(examsH.GenerateIllustration))
+	mux.HandleFunc("GET /api/illustrations/saved", requireUser(examsH.ListSavedIllustrations))
+	mux.HandleFunc("POST /api/illustrations/saved", requireUser(examsH.SaveIllustration))
+	mux.HandleFunc("DELETE /api/illustrations/saved/{ill_id}", requireUser(examsH.DeleteSavedIllustration))
 
 	return httpx.CORS(httpx.Recover(mux)), nil
 }

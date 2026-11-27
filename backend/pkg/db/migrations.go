@@ -153,6 +153,7 @@ func Migrate(conn *gorm.DB) error {
 		&LevelCurriculum{},
 		&ExamPaper{},
 		&QuestionBlock{},
+		&SavedIllustration{},
 	}
 	for _, m := range models {
 		if err := conn.AutoMigrate(m); err != nil {
