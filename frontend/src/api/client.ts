@@ -664,11 +664,11 @@ export const api = {
   illustrations: {
     search: (q: string, bw = true) =>
       req<IllustrationSuggestion[]>(`/illustrations/search?q=${encodeURIComponent(q)}&bw=${bw ? '1' : '0'}`),
-    generate: (prompt: string, bw = false) =>
+    generate: (prompt: string, bw = false, style = 'lofi_pastel') =>
       req<IllustrationSuggestion>('/illustrations/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, bw }),
+        body: JSON.stringify({ prompt, bw, style }),
       }),
   },
 }

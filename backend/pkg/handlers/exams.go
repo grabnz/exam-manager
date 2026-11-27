@@ -1092,6 +1092,7 @@ func (h *ExamsHandler) GenerateIllustration(w http.ResponseWriter, r *http.Reque
 	var body struct {
 		Prompt string `json:"prompt"`
 		BW     bool   `json:"bw"`
+		Style  string `json:"style"`
 	}
 	if err := httpx.DecodeJSON(r, &body); err != nil || strings.TrimSpace(body.Prompt) == "" {
 		httpx.WriteError(w, http.StatusBadRequest, "الرجاء كتابة وصف المشهد المطلوب")
@@ -1107,13 +1108,14 @@ func (h *ExamsHandler) GenerateIllustration(w http.ResponseWriter, r *http.Reque
 
 	// 0. Prefer our dedicated free Cloudflare Workers AI proxy if configured
 	if cfWorkerURL != "" {
-		reqBody, _ := json.Marshal(map[string]any{"prompt": userPrompt, "bw": body.BW})
+		reqBody, _ := json.Marshal(map[string]any{"prompt": userPrompt, "bw": body.BW, "style": body.Style})
 		req, err := http.NewRequest("POST", cfWorkerURL, bytes.NewReader(reqBody))
 		if err != nil {
 			httpx.WriteError(w, http.StatusInternalServerError, err.Error())
 			return
 		}
 		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("User-Agent", "ExamManagerBackend/1.0")
 		if cfWorkerSecret != "" {
 			req.Header.Set("X-AI-Secret", cfWorkerSecret)
 		}

@@ -88,9 +88,11 @@ export default function ExamEditor() {
 
   const [imgQuery, setImgQuery] = useState('')
   const [imgBW, setImgBW] = useState(false)
+  const [imgStyle, setImgStyle] = useState<'lofi_pastel' | 'ligne_claire'>('lofi_pastel')
   const [imgResults, setImgResults] = useState<IllustrationSuggestion[]>([])
   const [loadingImg, setLoadingImg] = useState(false)
   const [generatingImg, setGeneratingImg] = useState(false)
+  const [previewImg, setPreviewImg] = useState<IllustrationSuggestion | null>(null)
   const [activeImageTarget, setActiveImageTarget] = useState<string | null>(null) // block id
 
   const levelModules = useMemo(() => getModulesForLevel(level), [level])
@@ -148,9 +150,9 @@ export default function ExamEditor() {
     }
     setGeneratingImg(true)
     try {
-      const res = await api.illustrations.generate(clean, imgBW)
+      const res = await api.illustrations.generate(clean, imgBW, imgStyle)
       setImgResults(prev => [res, ...prev.filter(x => x.id !== res.id)])
-      ui.toast('تم توليد رسم Lofi Linear بنجاح — اضغطوا عليه لإدراجه', 'success')
+      setPreviewImg(res)
     } catch (err: any) {
       ui.toast(err.message || 'تعذّر توليد الرسم', 'error')
     } finally {
@@ -561,6 +563,26 @@ export default function ExamEditor() {
                     {loadingImg ? '…' : 'بحث'}
                   </button>
                 </div>
+                <div className="grid grid-cols-2 gap-1 bg-canvas p-1 rounded-xl text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => setImgStyle('lofi_pastel')}
+                    className={`py-1 rounded-lg font-semibold transition ${
+                      imgStyle === 'lofi_pastel' ? 'bg-surface text-brand shadow-sm' : 'text-ink-muted'
+                    }`}
+                  >
+                    Flat Art Adouci
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setImgStyle('ligne_claire')}
+                    className={`py-1 rounded-lg font-semibold transition ${
+                      imgStyle === 'ligne_claire' ? 'bg-surface text-brand shadow-sm' : 'text-ink-muted'
+                    }`}
+                  >
+                    Ligne Claire (BD)
+                  </button>
+                </div>
                 <button
                   type="button"
                   disabled={generatingImg || !imgQuery.trim()}
@@ -568,7 +590,7 @@ export default function ExamEditor() {
                   className="arabic w-full py-2 bg-brand hover:bg-brand-hover disabled:bg-gray-300 text-white rounded-xl text-xs font-semibold shadow-sm transition inline-flex items-center justify-center gap-1.5"
                 >
                   <SparklesIcon className={`w-3.5 h-3.5 ${generatingImg ? 'animate-spin' : ''}`} />
-                  <span>{generatingImg ? 'جاري رسم المشهد بأسلوب Lofi…' : 'توليد رسم Lofi تلقائي لهذا المشهد (AI)'}</span>
+                  <span>{generatingImg ? 'جاري رسم المشهد بجودة عالية…' : 'توليد رسم تلقائي لهذا المشهد (AI)'}</span>
                 </button>
               </form>
 
@@ -622,7 +644,8 @@ export default function ExamEditor() {
                   <button
                     key={img.id}
                     type="button"
-                    onClick={() => insertIllustration(img.url)}
+                    onClick={() => setPreviewImg(img)}
+                    title="اضغط للتكبير والمعاينة قبل الإدراج"
                     className="bg-canvas/60 border border-line hover:border-brand rounded-2xl p-2 text-right space-y-1.5 transition group"
                   >
                     <div className="bg-white rounded-xl border border-line h-24 flex items-center justify-center overflow-hidden p-1">
@@ -646,6 +669,83 @@ export default function ExamEditor() {
           )}
         </aside>
       </div>
+
+      {/* ── Zoom-Before-Insert Illustration Preview Modal ── */}
+      {previewImg && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/50 backdrop-blur-[2px] px-4 animate-fade-in"
+          onClick={() => setPreviewImg(null)}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            className="w-full max-w-2xl bg-surface border border-line rounded-3xl p-5 space-y-4 shadow-float animate-scale-in"
+            dir="rtl"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="text-sm font-bold text-ink truncate" dir="ltr">{previewImg.title}</h3>
+                <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                  <span className="text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-full num" dir="ltr">
+                    {previewImg.print_score}%
+                  </span>
+                  {(previewImg.reasons ?? []).map((r, i) => (
+                    <span key={i} className="arabic text-[10px] bg-canvas text-ink-muted px-2 py-0.5 rounded-full">
+                      {r}
+                    </span>
+                  ))}
+                </div>
+              </div>
+              <button
+                onClick={() => setPreviewImg(null)}
+                className="p-1.5 rounded-xl text-ink-subtle hover:text-ink hover:bg-canvas transition"
+              >
+                <XIcon className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="bg-white border border-line rounded-2xl p-4 flex items-center justify-center max-h-[60vh] overflow-hidden">
+              <img
+                src={previewImg.url}
+                alt={previewImg.title}
+                className={`max-h-[54vh] max-w-full object-contain rounded-xl ${
+                  imgBW && previewImg.source !== 'arasaac' ? 'grayscale contrast-125' : ''
+                }`}
+              />
+            </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => {
+                  insertIllustration(previewImg.url)
+                  setPreviewImg(null)
+                }}
+                className="arabic flex-1 py-2.5 bg-brand hover:bg-brand-hover text-white rounded-xl text-sm font-semibold shadow-sm transition inline-flex items-center justify-center gap-1.5"
+              >
+                <CheckIcon className="w-4 h-4" /> إدراج في الامتحان
+              </button>
+              {previewImg.source === 'lofi_ai' && (
+                <button
+                  type="button"
+                  disabled={generatingImg}
+                  onClick={() => void generateLofiImage(previewImg.title)}
+                  className="arabic px-4 py-2.5 bg-canvas border border-line hover:border-brand/40 text-ink rounded-xl text-xs font-semibold transition inline-flex items-center gap-1.5"
+                >
+                  <RefreshCwIcon className={`w-3.5 h-3.5 ${generatingImg ? 'animate-spin' : ''}`} />
+                  <span>{generatingImg ? 'جاري التوليد…' : 'نسخة أخرى'}</span>
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setPreviewImg(null)}
+                className="arabic px-4 py-2.5 border border-line rounded-xl text-xs text-ink-muted hover:bg-canvas transition"
+              >
+                إغلاق
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
