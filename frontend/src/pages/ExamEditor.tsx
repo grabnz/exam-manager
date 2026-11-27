@@ -135,6 +135,7 @@ export default function ExamEditor() {
 
   // Old Exams Picker state
   const [archiveList, setArchiveList] = useState<ExamPaper[]>([])
+  const [loadingArchiveList, setLoadingArchiveList] = useState(false)
   const [archiveSearch, setArchiveSearch] = useState('')
   const [expandedExamId, setExpandedExamId] = useState<string | null>(null)
   const [archiveDetails, setArchiveDetails] = useState<Record<string, ExamPaper>>({})
@@ -209,11 +210,14 @@ export default function ExamEditor() {
   }
 
   const loadArchiveList = async () => {
+    setLoadingArchiveList(true)
     try {
       const res = await api.exams.list()
       setArchiveList(Array.isArray(res) ? res.filter(e => e.id !== id) : [])
     } catch {
       setArchiveList([])
+    } finally {
+      setLoadingArchiveList(false)
     }
   }
 
@@ -223,14 +227,12 @@ export default function ExamEditor() {
       return
     }
     setExpandedExamId(examId)
-    if (!archiveDetails[examId]) {
-      setLoadingArchiveId(examId)
-      try {
-        const full = await api.exams.get(examId)
-        setArchiveDetails(prev => ({ ...prev, [examId]: full }))
-      } finally {
-        setLoadingArchiveId(null)
-      }
+    setLoadingArchiveId(examId)
+    try {
+      const full = await api.exams.get(examId)
+      setArchiveDetails(prev => ({ ...prev, [examId]: full }))
+    } finally {
+      setLoadingArchiveId(null)
     }
   }
 
@@ -722,14 +724,24 @@ export default function ExamEditor() {
             </div>
           ) : drawerTab === 'archive' ? (
             <div className="space-y-3">
-              <div className="relative">
-                <SearchIcon className="w-3.5 h-3.5 text-ink-subtle absolute right-2.5 top-1/2 -translate-y-1/2" />
-                <input
-                  value={archiveSearch}
-                  onChange={e => setArchiveSearch(e.target.value)}
-                  placeholder="ابحث في امتحاناتك السابقة (السنة، المستوى، العنوان)…"
-                  className="arabic w-full bg-canvas border border-line rounded-xl pr-8 pl-2.5 py-1.5 text-xs focus:bg-surface focus:outline-none"
-                />
+              <div className="flex items-center gap-1.5">
+                <div className="relative flex-1">
+                  <SearchIcon className="w-3.5 h-3.5 text-ink-subtle absolute right-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    value={archiveSearch}
+                    onChange={e => setArchiveSearch(e.target.value)}
+                    placeholder="ابحث في امتحاناتك المحفوظة أو المستوردة…"
+                    className="arabic w-full bg-canvas border border-line rounded-xl pr-8 pl-2.5 py-1.5 text-xs focus:bg-surface focus:outline-none"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void loadArchiveList()}
+                  title="تحديث قائمة الامتحانات"
+                  className="p-2 bg-canvas border border-line hover:border-brand/40 rounded-xl text-ink-muted hover:text-brand transition"
+                >
+                  <RefreshCwIcon className={`w-3.5 h-3.5 ${loadingArchiveList ? 'animate-spin' : ''}`} />
+                </button>
               </div>
 
               <div className="space-y-2 max-h-[62vh] overflow-y-auto pl-1">
@@ -758,6 +770,13 @@ export default function ExamEditor() {
                               </span>
                               <span className="text-[10px] bg-brand-light text-brand px-2 py-0.5 rounded-full" dir="ltr">
                                 {ex.level} · T{ex.trimester}
+                              </span>
+                              <span className={`arabic text-[10px] px-1.5 py-0.5 rounded-full border ${
+                                ex.has_attachment
+                                  ? 'bg-sky-50 text-sky-700 border-sky-200'
+                                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              }`}>
+                                {ex.has_attachment ? 'مستورد' : 'محفوظ'}
                               </span>
                               {isSameYear && (
                                 <span className="arabic text-[10px] bg-amber-50 text-amber-800 border border-amber-200 px-1.5 py-0.5 rounded-full">
@@ -826,9 +845,9 @@ export default function ExamEditor() {
                       </div>
                     )
                   })}
-                {archiveList.length === 0 && (
+                {!loadingArchiveList && archiveList.length === 0 && (
                   <p className="arabic text-xs text-ink-subtle text-center py-6">
-                    لا توجد امتحانات سابقة بعد. استوردوا امتحاناتكم القديمة (Word / PDF) من الخزينة لاقتباس تمارينها هنا.
+                    لا توجد امتحانات أخرى محفوظة بعد. أي امتحان تنشئونه يدوياً أو تولّدونه أو تستوردونه سيظهر هنا لاقتباس تمارينه.
                   </p>
                 )}
               </div>
