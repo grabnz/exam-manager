@@ -162,6 +162,74 @@ func StarterFrenchQuestionBank() []QuestionBlock {
 			Criterion: "C1", Points: 6, Difficulty: "hard", Topic: "Production Écrite : Mes loisirs préférés (6ème année)",
 			ContentJSON: `{"prompt":"Ton correspondant étranger te demande comment tu occupes ton temps libre le week-end. Écris-lui un texte de 8 à 10 lignes pour présenter tes loisirs préférés et expliquer pourquoi tu les aimes.","lines":8,"toolbox":{"nouns":["le temps libre","une passion","la bibliothèque","le stade","mes camarades"],"verbs":["pratiquer","découvrir","partager","se détendre","enrichir"],"connectors":["D'une part,","D'autre part,","De plus,","En effet,","En conclusion,"]},"panels":["/illustrations/sport.jpg","/illustrations/lecture.jpg"],"model_answer":"Pendant le week-end, j'aime organiser mon temps libre entre le sport et la lecture. D'une part, le samedi matin, je retrouve mes camarades au stade pour jouer au football et garder une bonne forme physique. D'autre part, le dimanche après-midi, je m'installe au calme pour lire des livres d'aventures qui enrichissent mon vocabulaire. En conclusion, ces deux activités m'aident à grandir et à être heureux."}`,
 		},
+
+		// ── Extra Varied Themes & Formats (so repeated generations never repeat!) ──
+		{
+			ID: "starter-fr-4e-m1-ecole-comp", Section: "lecture", BlockType: "reading_comprehension",
+			Level: "4ème année", SubjectCode: "francais", Trimester: 1, ModuleNum: 1,
+			Criterion: "C1", Points: 6, Difficulty: "easy", Topic: "La rentrée dans la cour (Texte + Questions)",
+			ContentJSON: `{"title":"Une belle rentrée scolaire","text":"Le jour de la rentrée, la cour de l'école est pleine de joie. Les élèves portent leurs tabliers propres et leurs cartables neufs. Inès retrouve son amie Meriem près du grand arbre. Quand la cloche sonne, tous les enfants se rangent calmement devant leur classe pour saluer la maîtresse.","source":"Module 1 — 4ème année","image_url":"/illustrations/ecole.jpg","numbered_lines":true,"questions":[{"prompt":"Que portent les élèves le jour de la rentrée ?","criterion":"C2","points":2,"lines":2,"answer":"Ils portent leurs tabliers propres et leurs cartables neufs."},{"prompt":"Où Inès retrouve-t-elle son amie Meriem ?","criterion":"C2","points":2,"lines":1,"answer":"Près du grand arbre dans la cour."},{"prompt":"Que font les enfants quand la cloche sonne ?","criterion":"C4","points":2,"lines":2,"answer":"Ils se rangent calmement devant leur classe pour saluer la maîtresse."}]}`,
+		},
+		{
+			ID: "starter-fr-4e-m4-jardin-comp", Section: "lecture", BlockType: "reading_comprehension",
+			Level: "4ème année", SubjectCode: "francais", Trimester: 2, ModuleNum: 4,
+			Criterion: "C1", Points: 6, Difficulty: "medium", Topic: "Protégeons le jardin de l'école (Texte + Questions)",
+			ContentJSON: `{"title":"Le club nature de l'école","text":"Chaque vendredi après-midi, les membres du club nature se réunissent dans le jardin de l'école. Karim ramasse les feuilles mortes pendant que Yasmine arrose les rosiers rouges. La maîtresse installe une petite pancarte en bois : « Protégeons nos plantes ! ». Grâce à leurs efforts, la cour devient un endroit agréable pour tous.","source":"Module 4 — 4ème année","image_url":"/illustrations/jardin.jpg","numbered_lines":true,"questions":[{"prompt":"Quand les membres du club nature se réunissent-ils ?","criterion":"C2","points":2,"lines":1,"answer":"Chaque vendredi après-midi."},{"prompt":"Quel est le rôle de Karim et celui de Yasmine ?","criterion":"C2","points":2,"lines":2,"answer":"Karim ramasse les feuilles mortes et Yasmine arrose les rosiers rouges."},{"prompt":"Qu'est-ce qui est écrit sur la pancarte en bois ?","criterion":"C4","points":2,"lines":1,"answer":"« Protégeons nos plantes ! »"}]}`,
+		},
+		{
+			ID: "starter-fr-4e-m5-lecture-comp", Section: "lecture", BlockType: "reading_comprehension",
+			Level: "4ème année", SubjectCode: "francais", Trimester: 2, ModuleNum: 5,
+			Criterion: "C1", Points: 6, Difficulty: "medium", Topic: "Le coin lecture de la classe (Texte + Questions)",
+			ContentJSON: `{"title":"Un livre passionnant","text":"Dans la salle de classe, il y a une petite bibliothèque bien rangée. Pendant le temps libre, Adam choisit un album illustré sur les animaux de la forêt. Il s'assoit calmement à sa table, tourne les pages avec soin et découvre comment les oiseaux construisent leurs nids au printemps.","source":"Module 5 — 4ème année","image_url":"/illustrations/lecture.jpg","numbered_lines":true,"questions":[{"prompt":"Où se trouve la petite bibliothèque ?","criterion":"C2","points":2,"lines":1,"answer":"Dans la salle de classe."},{"prompt":"Quel livre Adam choisit-il ?","criterion":"C2","points":2,"lines":2,"answer":"Un album illustré sur les animaux de la forêt."},{"prompt":"Comment sait-on qu'Adam respecte les livres ?","criterion":"C4","points":2,"lines":2,"answer":"Il s'assoit calmement et tourne les pages avec soin."}]}`,
+		},
+		{
+			ID: "starter-fr-4e-m3-table-etre", Section: "langue", BlockType: "table_fill",
+			Level: "4ème année", SubjectCode: "francais", Trimester: 1, ModuleNum: 3,
+			Criterion: "C5", Points: 3, Difficulty: "medium", Topic: "Conjugaison : Être et Avoir au présent",
+			ContentJSON: `{"prompt":"Je complète le tableau avec les verbes « être » et « avoir » au présent :","headers":["Pronom","Verbe ÊTRE","Verbe AVOIR"],"rows":[["Je / J'","[suis]","[ai]"],["Nous","[sommes]","[avons]"],["Ils / Elles","[sont]","[ont]"]]}`,
+		},
+		{
+			ID: "starter-fr-4e-m3-transf-neg", Section: "langue", BlockType: "transformation",
+			Level: "4ème année", SubjectCode: "francais", Trimester: 1, ModuleNum: 3,
+			Criterion: "C5", Points: 3, Difficulty: "medium", Topic: "Grammaire : Forme négative (ne ... pas)",
+			ContentJSON: `{"prompt":"Je transforme ces phrases à la forme négative :","items":[{"source":"Sami oublie son cahier à la maison.","lines":2,"answer":"Sami n'oublie pas son cahier à la maison."},{"source":"Les élèves courent dans les couloirs.","lines":2,"answer":"Les élèves ne courent pas dans les couloirs."}]}`,
+		},
+		{
+			ID: "starter-fr-4e-m4-matching-adj", Section: "langue", BlockType: "matching",
+			Level: "4ème année", SubjectCode: "francais", Trimester: 2, ModuleNum: 4,
+			Criterion: "C5", Points: 2, Difficulty: "easy", Topic: "Vocabulaire : Relier les contraires",
+			ContentJSON: `{"prompt":"Je relie chaque mot à son contraire :","pairs":[{"left":"propre","right":"sale"},{"left":"heureux","right":"triste"},{"left":"grand","right":"petit"},{"left":"ouvrir","right":"fermer"}]}`,
+		},
+		{
+			ID: "starter-fr-4e-m5-cloze-sonsont", Section: "langue", BlockType: "fill_blanks",
+			Level: "4ème année", SubjectCode: "francais", Trimester: 2, ModuleNum: 5,
+			Criterion: "C5", Points: 3, Difficulty: "medium", Topic: "Orthographe : Homophones son / sont",
+			ContentJSON: `{"prompt":"Je complète par « son » ou « sont » :","word_bank":["son","sont"],"sentences":["Adam range [son] livre dans la bibliothèque.","Les fleurs du jardin [sont] très colorées.","Inès et [son] frère [sont] prêts pour l'école."]}`,
+		},
+		{
+			ID: "starter-fr-4e-m4-prod-ami", Section: "production", BlockType: "production_ecrite",
+			Level: "4ème année", SubjectCode: "francais", Trimester: 1, ModuleNum: 1,
+			Criterion: "C1", Points: 6, Difficulty: "medium", Topic: "Production Écrite : Raconter une récréation à l'école",
+			ContentJSON: `{"prompt":"Observe les images et écris un petit texte (4 à 5 phrases) pour raconter comment tu passes la récréation avec tes camarades dans la cour de l'école.","lines":6,"toolbox":{"nouns":["la cloche","la cour","mes camarades","le ballon","le goûter"],"verbs":["sonner","jouer","partager","rire","rentrer"],"connectors":["D'abord,","Ensuite,","Puis,","Enfin,"]},"panels":["/illustrations/ecole.jpg","/illustrations/sport.jpg"],"model_answer":"D'abord, la cloche sonne et nous sortons joyeusement dans la cour. Ensuite, je partage mon goûter avec mes camarades. Puis, nous jouons ensemble au ballon. Enfin, nous rentrons calmement en classe."}`,
+		},
+		{
+			ID: "starter-fr-4e-m5-prod-lecture", Section: "production", BlockType: "production_ecrite",
+			Level: "4ème année", SubjectCode: "francais", Trimester: 2, ModuleNum: 5,
+			Criterion: "C1", Points: 6, Difficulty: "medium", Topic: "Production Écrite : Présenter mon livre ou jeu préféré",
+			ContentJSON: `{"prompt":"Décris en 4 à 5 phrases ce que tu aimes faire pendant ton temps libre à la maison (lire une histoire, dessiner ou jouer au parc).","lines":6,"toolbox":{"nouns":["un livre","une histoire","ma chambre","le parc","le plaisir"],"verbs":["choisir","lire","imaginer","dessiner","aimer"],"connectors":["Le week-end,","D'abord,","Aussi,","Enfin,"]},"panels":["/illustrations/lecture.jpg"],"model_answer":"Le week-end, j'aime lire des histoires dans ma chambre. D'abord, je choisis un joli livre illustré. Aussi, je dessine les personnages de l'histoire. Enfin, je raconte ce que j'ai lu à mes parents."}`,
+		},
+		{
+			ID: "starter-fr-5e-m3-sport-comp", Section: "lecture", BlockType: "reading_comprehension",
+			Level: "5ème année", SubjectCode: "francais", Trimester: 2, ModuleNum: 3,
+			Criterion: "C1", Points: 7, Difficulty: "medium", Topic: "Le tournoi sportif de l'école (5ème année)",
+			ContentJSON: `{"title":"L'esprit d'équipe","text":"Samedi dernier, notre école a organisé un tournoi amical de football au parc municipal. Avant le début du match, l'entraîneur a rappelé aux deux équipes que le respect et le fair-play sont plus importants que la victoire. À la fin de la rencontre, tous les joueurs se sont serré la main avec le sourire.","source":"Module 3 — 5ème année","image_url":"/illustrations/sport.jpg","numbered_lines":true,"questions":[{"prompt":"Quel événement l'école a-t-elle organisé samedi dernier ?","criterion":"C2","points":2,"lines":1,"answer":"Un tournoi amical de football au parc municipal."},{"prompt":"Quel conseil l'entraîneur a-t-il donné aux joueurs ?","criterion":"C2","points":2,"lines":2,"answer":"Que le respect et le fair-play sont plus importants que la victoire."},{"prompt":"Comment les joueurs montrent-ils leur bon esprit sportif à la fin du match ?","criterion":"C4","points":3,"lines":2,"answer":"Ils se serrent tous la main avec le sourire."}]}`,
+		},
+		{
+			ID: "starter-fr-5e-m3-prod-sport", Section: "production", BlockType: "production_ecrite",
+			Level: "5ème année", SubjectCode: "francais", Trimester: 2, ModuleNum: 3,
+			Criterion: "C1", Points: 6, Difficulty: "medium", Topic: "Production Écrite : Une journée sportive ou une sortie",
+			ContentJSON: `{"prompt":"Raconte en 6 à 7 lignes une journée sportive ou une sortie organisée par ton école. Explique ce que tu as fait et pourquoi tu as aimé cette journée.","lines":7,"toolbox":{"nouns":["le tournoi","l'équipe","le parc","le respect","un beau souvenir"],"verbs":["participer","encourager","courir","applaudir","féliciter"],"connectors":["Samedi dernier,","Tout d'abord,","Ensuite,","À la fin,","Ce jour-là,"]},"panels":["/illustrations/sport.jpg"],"model_answer":"Samedi dernier, notre école a organisé une grande journée sportive au parc. Tout d'abord, nous avons formé deux équipes mixtes. Ensuite, nous avons joué avec enthousiasme et fair-play. À la fin, le directeur a félicité tous les élèves. Ce jour-là restera un beau souvenir."}`,
+		},
 	}
 }
 

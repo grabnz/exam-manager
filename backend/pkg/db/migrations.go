@@ -178,6 +178,7 @@ func Migrate(conn *gorm.DB) error {
 		{"seed_rooms_and_curriculum_v1", seedRoomsAndCurriculum},
 		{"seed_french_question_bank_v1", EnsureFrenchQuestionBank},
 		{"seed_french_question_bank_v2", EnsureFrenchQuestionBank},
+		{"seed_french_question_bank_v3", EnsureFrenchQuestionBank},
 	}
 	for _, s := range seeds {
 		if err := once(conn, s.key, s.fn); err != nil {

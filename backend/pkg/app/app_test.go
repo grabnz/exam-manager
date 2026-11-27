@@ -494,6 +494,42 @@ func TestFrenchExamStudioAndBank(t *testing.T) {
 		}
 	}
 
+	// 2b. Generating a second 4ème année exam produces DIFFERENT exercises (anti-repetition) & still 20/20
+	recA := doReq(t, h, "POST", "/api/exams/generate", tok, map[string]any{
+		"level": "4ème année", "trimester": 1, "module_num": 2, "school_year": "2026-2027",
+	})
+	recB := doReq(t, h, "POST", "/api/exams/generate", tok, map[string]any{
+		"level": "4ème année", "trimester": 1, "module_num": 2, "school_year": "2026-2027",
+	})
+	var genA, genB struct {
+		TotalPoints float64          `json:"total_points"`
+		Blocks      []map[string]any `json:"blocks"`
+	}
+	_ = json.Unmarshal(recA.Body.Bytes(), &genA)
+	_ = json.Unmarshal(recB.Body.Bytes(), &genB)
+	if genA.TotalPoints != 20 || genB.TotalPoints != 20 {
+		t.Fatalf("expected both consecutive exams to be 20/20, got %.2f and %.2f", genA.TotalPoints, genB.TotalPoints)
+	}
+	idsA := map[string]bool{}
+	for _, b := range genA.Blocks {
+		if bid, ok := b["bank_id"].(string); ok && bid != "" {
+			idsA[bid] = true
+		}
+	}
+	sameCount := 0
+	totalB := 0
+	for _, b := range genB.Blocks {
+		if bid, ok := b["bank_id"].(string); ok && bid != "" {
+			totalB++
+			if idsA[bid] {
+				sameCount++
+			}
+		}
+	}
+	if totalB > 0 && sameCount == totalB {
+		t.Fatalf("expected consecutive generated exams to vary exercises, but all %d blocks matched", totalB)
+	}
+
 	// 3. ML Suggestions return non-empty scored blocks even when excluding generated bank IDs
 	exclude := []string{}
 	for _, b := range gen.Blocks {

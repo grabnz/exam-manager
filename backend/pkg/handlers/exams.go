@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"math/rand/v2"
 	"net/http"
 	"net/url"
 	"os"
@@ -605,7 +606,7 @@ func (h *ExamsHandler) syncBlocksToBank(userID string, paper db.ExamPaper) {
 func (h *ExamsHandler) ensureStarterBank() {
 	var starterCount int64
 	h.DB.Model(&db.QuestionBlock{}).Where("owner_id IS NULL").Count(&starterCount)
-	if starterCount < 15 {
+	if starterCount < 30 {
 		_ = db.EnsureFrenchQuestionBank(h.DB)
 	}
 }
@@ -911,6 +912,23 @@ func (h *ExamsHandler) GenerateExam(w http.ResponseWriter, r *http.Request) {
 
 	h.ensureStarterBank()
 
+	// Collect bank_ids used in the teacher's recent exams so consecutive generations stay fresh & varied
+	recentlyUsed := map[string]int{}
+	var recentPapers []db.ExamPaper
+	h.DB.Select("blocks_json").Where("owner_id = ?", u.ID).Order("created_at DESC").Limit(6).Find(&recentPapers)
+	for _, rp := range recentPapers {
+		var rBlocks []struct {
+			BankID string `json:"bank_id"`
+		}
+		if json.Unmarshal([]byte(rp.BlocksJSON), &rBlocks) == nil {
+			for _, rb := range rBlocks {
+				if rb.BankID != "" {
+					recentlyUsed[rb.BankID]++
+				}
+			}
+		}
+	}
+
 	var bank []db.QuestionBlock
 	h.DB.Where("owner_id IS NULL OR owner_id = ?", u.ID).Find(&bank)
 
@@ -937,6 +955,11 @@ func (h *ExamsHandler) GenerateExam(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			sc, _ := scoreBlock(b, req.Level, req.Trimester, req.ModuleNum, sec, "", "", req.SchoolYear)
+			// Strong anti-repetition penalty for blocks already used in recent exams + light variety jitter
+			if cnt := recentlyUsed[b.ID]; cnt > 0 {
+				sc -= 35 * cnt
+			}
+			sc += rand.IntN(9)
 			list = append(list, cand{b, sc})
 		}
 		sort.Slice(list, func(i, j int) bool { return list[i].s > list[j].s })
@@ -1034,22 +1057,50 @@ func (h *ExamsHandler) GenerateExam(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// II. Langue (fill exact budget without exceeding 20/20)
-	langueCandidates := pickSection("langue", nil, 6)
+	// II. Langue (fill exact budget without exceeding 20/20 AND prefer diverse exercise types!)
+	langueCandidates := pickSection("langue", nil, 10)
 	var langueChosen []db.QuestionBlock
+	usedTypes := map[string]bool{}
 	languePts := 0.0
+	// Pass 1: pick distinct block types (e.g. fill_blanks + table_fill + transformation/matching/scramble)
 	for _, b := range langueCandidates {
-		p := blockEffectivePoints(b)
 		if len(langueChosen) >= 3 {
 			break
 		}
+		if usedTypes[b.BlockType] {
+			continue
+		}
+		p := blockEffectivePoints(b)
 		if len(langueChosen) > 0 && languePts+p > langueBudget {
 			continue
 		}
 		langueChosen = append(langueChosen, b)
+		usedTypes[b.BlockType] = true
 		languePts += p
 		if math.Abs(languePts-langueBudget) < 0.01 {
 			break
+		}
+	}
+	// Pass 2: if still under budget & < 3 exercises, allow remaining candidates
+	if languePts < langueBudget-1 && len(langueChosen) < 3 {
+		chosenIDs := map[string]bool{}
+		for _, c := range langueChosen {
+			chosenIDs[c.ID] = true
+		}
+		for _, b := range langueCandidates {
+			if len(langueChosen) >= 3 || chosenIDs[b.ID] {
+				break
+			}
+			p := blockEffectivePoints(b)
+			if len(langueChosen) > 0 && languePts+p > langueBudget {
+				continue
+			}
+			langueChosen = append(langueChosen, b)
+			chosenIDs[b.ID] = true
+			languePts += p
+			if math.Abs(languePts-langueBudget) < 0.01 {
+				break
+			}
 		}
 	}
 	lastLangueIdx := -1
