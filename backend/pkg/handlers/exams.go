@@ -966,66 +966,134 @@ func (h *ExamsHandler) GenerateExam(w http.ResponseWriter, r *http.Request) {
 			"content":   map[string]any{"heading": heading, "subtitle": subtitle},
 		})
 	}
-	appendBankBlock := func(b db.QuestionBlock) {
+	blockEffectivePoints := func(b db.QuestionBlock) float64 {
+		if b.BlockType == "reading_comprehension" {
+			var c struct {
+				Questions []struct {
+					Points float64 `json:"points"`
+				} `json:"questions"`
+			}
+			if err := json.Unmarshal([]byte(b.ContentJSON), &c); err == nil && len(c.Questions) > 0 {
+				sum := 0.0
+				for _, q := range c.Questions {
+					sum += q.Points
+				}
+				if sum > 0 {
+					return sum
+				}
+			}
+		}
+		return b.Points
+	}
+	appendBankBlock := func(b db.QuestionBlock) int {
 		var content any
 		_ = json.Unmarshal([]byte(b.ContentJSON), &content)
 		shortID := b.ID
 		if len(shortID) > 6 {
 			shortID = shortID[:6]
 		}
+		pts := blockEffectivePoints(b)
+		idx := len(blocks)
 		blocks = append(blocks, map[string]any{
 			"id":        fmt.Sprintf("gen-%d-%s", len(blocks)+1, shortID),
 			"bank_id":   b.ID,
 			"section":   b.Section,
 			"type":      b.BlockType,
 			"criterion": b.Criterion,
-			"points":    b.Points,
+			"points":    pts,
 			"topic":     b.Topic,
 			"content":   content,
 		})
-		totalPts += b.Points
+		totalPts += pts
+		return idx
 	}
 
-	// I. Lecture — Compréhension (prefer integrated Texte + Questions block, fallback to reading_text + questions)
+	// Pick Lecture & Production first so we know the exact remaining budget for Langue (strict 20/20)
 	lectureComp := pickSection("lecture", []string{"reading_comprehension"}, 1)
+	var lectureChosen []db.QuestionBlock
 	if len(lectureComp) > 0 {
-		appendHeader("lecture", "I. LECTURE — COMPRÉHENSION", "Je lis attentivement le texte puis je réponds aux questions.")
-		appendBankBlock(lectureComp[0])
+		lectureChosen = lectureComp
 	} else {
-		lectureText := pickSection("lecture", []string{"reading_text"}, 1)
-		lectureQs := pickSection("lecture", []string{"mcq", "true_false", "open_question"}, 3)
-		if len(lectureText) > 0 || len(lectureQs) > 0 {
-			appendHeader("lecture", "I. LECTURE — COMPRÉHENSION", "Je lis attentivement le texte puis je réponds aux questions.")
-			for _, b := range lectureText {
-				appendBankBlock(b)
-			}
-			for _, b := range lectureQs {
-				appendBankBlock(b)
-			}
-		}
+		lectureChosen = append(lectureChosen, pickSection("lecture", []string{"reading_text"}, 1)...)
+		lectureChosen = append(lectureChosen, pickSection("lecture", []string{"mcq", "true_false", "open_question"}, 3)...)
 	}
-
-	// II. Langue (Grammaire, Conjugaison, Orthographe — aim for ~7-8 points across 2-3 varied exercises)
-	langueBlocks := pickSection("langue", nil, 3)
-	if len(langueBlocks) > 0 {
-		appendHeader("langue", "II. LANGUE", "Grammaire, conjugaison et orthographe.")
-		languePts := 0.0
-		for _, b := range langueBlocks {
-			if languePts >= 7 && len(langueBlocks) > 2 {
-				break
-			}
-			appendBankBlock(b)
-			languePts += b.Points
-		}
-	}
-
-	// III. Production Écrite (6 points)
 	prodBlocks := pickSection("production", []string{"production_ecrite"}, 1)
+
+	lecturePts := 0.0
+	for _, b := range lectureChosen {
+		lecturePts += blockEffectivePoints(b)
+	}
+	prodPts := 0.0
+	for _, b := range prodBlocks {
+		prodPts += blockEffectivePoints(b)
+	}
+	langueBudget := 20.0 - lecturePts - prodPts
+	if langueBudget < 4 {
+		langueBudget = 6
+	}
+
+	// I. Lecture — Compréhension
+	if len(lectureChosen) > 0 {
+		appendHeader("lecture", "I. LECTURE — COMPRÉHENSION", "Je lis attentivement le texte puis je réponds aux questions.")
+		for _, b := range lectureChosen {
+			appendBankBlock(b)
+		}
+	}
+
+	// II. Langue (fill exact budget without exceeding 20/20)
+	langueCandidates := pickSection("langue", nil, 6)
+	var langueChosen []db.QuestionBlock
+	languePts := 0.0
+	for _, b := range langueCandidates {
+		p := blockEffectivePoints(b)
+		if len(langueChosen) >= 3 {
+			break
+		}
+		if len(langueChosen) > 0 && languePts+p > langueBudget {
+			continue
+		}
+		langueChosen = append(langueChosen, b)
+		languePts += p
+		if math.Abs(languePts-langueBudget) < 0.01 {
+			break
+		}
+	}
+	lastLangueIdx := -1
+	if len(langueChosen) > 0 {
+		appendHeader("langue", "II. LANGUE", "Grammaire, conjugaison et orthographe.")
+		for _, b := range langueChosen {
+			lastLangueIdx = appendBankBlock(b)
+		}
+	}
+
+	// III. Production Écrite
+	lastProdIdx := -1
 	if len(prodBlocks) > 0 {
 		appendHeader("production", "III. PRODUCTION ÉCRITE", "J'observe les images et j'utilise la boîte à outils pour rédiger mon texte.")
-		appendBankBlock(prodBlocks[0])
+		lastProdIdx = appendBankBlock(prodBlocks[0])
 	}
 
+	// Strict Tunisian Ministry 20/20 calibration: never produce 19 or 21
+	if len(blocks) > 0 && math.Abs(totalPts-20.0) > 0.01 {
+		diff := math.Round((20.0-totalPts)*2) / 2 // keep 0.5pt increments
+		adjustIdx := lastLangueIdx
+		if adjustIdx < 0 {
+			adjustIdx = lastProdIdx
+		}
+		if adjustIdx >= 0 {
+			curPts, _ := blocks[adjustIdx]["points"].(float64)
+			if curPts+diff >= 1 {
+				blocks[adjustIdx]["points"] = curPts + diff
+				totalPts += diff
+			} else if lastProdIdx >= 0 {
+				pPts, _ := blocks[lastProdIdx]["points"].(float64)
+				if pPts+diff >= 2 {
+					blocks[lastProdIdx]["points"] = pPts + diff
+					totalPts += diff
+				}
+			}
+		}
+	}
 	if totalPts == 0 {
 		totalPts = 20
 	}

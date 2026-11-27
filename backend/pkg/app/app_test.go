@@ -461,24 +461,35 @@ func TestFrenchExamStudioAndBank(t *testing.T) {
 		t.Fatalf("expected >= 20 starter question bank blocks, got %d", len(bank))
 	}
 
-	// 2. Smart exam generation produces a complete structured exam with blocks & points
-	rec = doReq(t, h, "POST", "/api/exams/generate", tok, map[string]any{
-		"level": "4ème année", "trimester": 1, "module_num": 2, "school_year": "2026-2027",
-	})
-	if rec.Code != 201 {
-		t.Fatalf("generate exam: got %d: %s", rec.Code, rec.Body.String())
-	}
+	// 2. Smart exam generation produces strictly 20/20 structured exams for all Tunisian primary levels
 	var gen struct {
 		ID          string           `json:"id"`
 		TotalPoints float64          `json:"total_points"`
 		Blocks      []map[string]any `json:"blocks"`
 	}
-	_ = json.Unmarshal(rec.Body.Bytes(), &gen)
-	if len(gen.Blocks) < 6 {
-		t.Fatalf("expected >= 6 generated blocks (headers + exercises), got %d", len(gen.Blocks))
-	}
-	if gen.TotalPoints < 15 {
-		t.Fatalf("expected total_points >= 15, got %.2f", gen.TotalPoints)
+	for _, lvl := range []string{"3ème année", "4ème année", "5ème année", "6ème année"} {
+		rec = doReq(t, h, "POST", "/api/exams/generate", tok, map[string]any{
+			"level": lvl, "trimester": 1, "module_num": 2, "school_year": "2026-2027",
+		})
+		if rec.Code != 201 {
+			t.Fatalf("generate exam (%s): got %d: %s", lvl, rec.Code, rec.Body.String())
+		}
+		_ = json.Unmarshal(rec.Body.Bytes(), &gen)
+		if len(gen.Blocks) < 6 {
+			t.Fatalf("expected >= 6 generated blocks for %s, got %d", lvl, len(gen.Blocks))
+		}
+		if gen.TotalPoints != 20 {
+			t.Fatalf("expected strict 20/20 for %s, got %.2f", lvl, gen.TotalPoints)
+		}
+		sum := 0.0
+		for _, b := range gen.Blocks {
+			if p, ok := b["points"].(float64); ok {
+				sum += p
+			}
+		}
+		if sum != 20 {
+			t.Fatalf("expected block point sum == 20 for %s, got %.2f", lvl, sum)
+		}
 	}
 
 	// 3. ML Suggestions return non-empty scored blocks even when excluding generated bank IDs
