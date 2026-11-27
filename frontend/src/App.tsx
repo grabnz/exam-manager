@@ -21,6 +21,9 @@ import Synthesis from './pages/Synthesis'
 import ScoreEntry from './pages/ScoreEntry'
 import PrintFinale from './pages/PrintFinale'
 import Profile from './pages/Profile'
+import Exams from './pages/Exams'
+import ExamEditor from './pages/ExamEditor'
+import ExamPrint from './pages/ExamPrint'
 
 export default function App() {
   useEffect(() => { startQueueSync() }, [])
@@ -47,6 +50,9 @@ export default function App() {
             <Route path="/classes/:id/synthesis" element={<RequireAuth><Synthesis /></RequireAuth>} />
             <Route path="/sessions/:id"     element={<RequireAuth><ScoreEntry /></RequireAuth>} />
             <Route path="/sessions/:id/print" element={<RequireAuth><PrintFinale /></RequireAuth>} />
+            <Route path="/exams"            element={<RequireAuth><Exams /></RequireAuth>} />
+            <Route path="/exams/:id"        element={<RequireAuth><ExamEditor /></RequireAuth>} />
+            <Route path="/exams/:id/print"  element={<RequireAuth><ExamPrint /></RequireAuth>} />
             <Route path="/profile"          element={<RequireAuth><Profile /></RequireAuth>} />
           </Routes>
           <BottomNav />

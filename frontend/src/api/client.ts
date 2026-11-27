@@ -565,4 +565,195 @@ export const api = {
       return null  // null = success
     },
   },
+  exams: {
+    list: (params?: { school_year?: string; level?: string; trimester?: number; q?: string }) => {
+      const sp = new URLSearchParams()
+      if (params?.school_year) sp.set('school_year', params.school_year)
+      if (params?.level) sp.set('level', params.level)
+      if (params?.trimester) sp.set('trimester', String(params.trimester))
+      if (params?.q) sp.set('q', params.q)
+      const qs = sp.toString()
+      return req<ExamPaper[]>(`/exams${qs ? `?${qs}` : ''}`)
+    },
+    get: (id: string) => req<ExamPaper>(`/exams/${id}`),
+    create: (data: ExamUpsertInput) =>
+      req<ExamPaper>('/exams', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }),
+    update: (id: string, data: ExamUpsertInput) =>
+      req<ExamPaper>(`/exams/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) => req<{ ok: boolean }>(`/exams/${id}`, { method: 'DELETE' }),
+    clone: (id: string, data: { school_year?: string; title?: string; trimester?: number }) =>
+      req<ExamPaper>(`/exams/${id}/clone`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }),
+    generate: (data: { title?: string; school_year?: string; level?: string; trimester?: number; module_num?: number; exam_type?: string }) =>
+      req<ExamPaper>('/exams/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }),
+    uploadLegacy: (file: File, meta: { title?: string; school_year?: string; level?: string; trimester?: number; module_num?: number }) => {
+      const fd = new FormData()
+      fd.append('file', file)
+      if (meta.title) fd.append('title', meta.title)
+      if (meta.school_year) fd.append('school_year', meta.school_year)
+      if (meta.level) fd.append('level', meta.level)
+      if (meta.trimester) fd.append('trimester', String(meta.trimester))
+      if (meta.module_num) fd.append('module_num', String(meta.module_num))
+      return req<ExamPaper>('/exams/upload-legacy', { method: 'POST', body: fd })
+    },
+    downloadAttachment: async (id: string, filename: string): Promise<string | null> => {
+      const res = await fetch(`${BASE}/exams/${id}/attachment`, { headers: authHeaders() })
+      if (!res.ok) return `Erreur ${res.status}`
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename || 'exam'
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+      return null
+    },
+  },
+  questionBank: {
+    list: (params?: { section?: string; level?: string; criterion?: string; q?: string }) => {
+      const sp = new URLSearchParams()
+      if (params?.section) sp.set('section', params.section)
+      if (params?.level) sp.set('level', params.level)
+      if (params?.criterion) sp.set('criterion', params.criterion)
+      if (params?.q) sp.set('q', params.q)
+      const qs = sp.toString()
+      return req<QuestionBankItem[]>(`/question-bank${qs ? `?${qs}` : ''}`)
+    },
+    create: (data: {
+      section: string; block_type: string; level: string; trimester: number; module_num?: number
+      criterion: string; points: number; difficulty?: string; topic?: string; content: Record<string, any>
+    }) =>
+      req<QuestionBankItem>('/question-bank', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) => req<{ ok: boolean }>(`/question-bank/${id}`, { method: 'DELETE' }),
+    suggest: (data: {
+      level?: string; trimester?: number; module_num?: number; section?: string
+      criterion?: string; target_difficulty?: string; current_year?: string
+      exclude_ids?: string[]; limit?: number
+    }) =>
+      req<ScoredSuggestion[]>('/question-bank/suggest', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }),
+    feedback: (id: string, data: { action: 'accepted' | 'skipped'; empirical_pass_rate?: number; school_year?: string }) =>
+      req<QuestionBankItem>(`/question-bank/${id}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }),
+  },
+  illustrations: {
+    search: (q: string) =>
+      req<IllustrationSuggestion[]>(`/illustrations/search?q=${encodeURIComponent(q)}`),
+  },
+}
+
+export type ExamBlockType =
+  | 'reading_text'
+  | 'mcq'
+  | 'true_false'
+  | 'open_question'
+  | 'fill_blanks'
+  | 'scramble'
+  | 'matching'
+  | 'production_ecrite'
+
+export interface ExamBlock {
+  id: string
+  bank_id?: string
+  section: 'lecture' | 'langue' | 'production'
+  type: ExamBlockType
+  criterion: string
+  points: number
+  topic?: string
+  content: Record<string, any>
+}
+
+export interface ExamPaper {
+  id: string
+  title: string
+  school_year: string
+  level: string
+  subject_code: string
+  trimester: number
+  module_num: number
+  exam_type: string
+  direction: 'ltr' | 'rtl'
+  blocks: ExamBlock[]
+  total_points: number
+  used_count: number
+  avg_score: number | null
+  source_file_name: string
+  has_attachment: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ExamUpsertInput {
+  title: string
+  school_year: string
+  level: string
+  subject_code?: string
+  trimester: number
+  module_num?: number
+  exam_type: string
+  direction?: 'ltr' | 'rtl'
+  blocks: ExamBlock[]
+  total_points: number
+  save_to_bank?: boolean
+}
+
+export interface QuestionBankItem {
+  id: string
+  section: 'lecture' | 'langue' | 'production'
+  block_type: ExamBlockType
+  level: string
+  subject_code: string
+  trimester: number
+  module_num: number
+  criterion: string
+  points: number
+  difficulty: 'easy' | 'medium' | 'hard'
+  empirical_pass_rate: number | null
+  topic: string
+  content: Record<string, any>
+  times_used: number
+  times_accepted: number
+  times_skipped: number
+  last_used_year: string
+  is_starter: boolean
+}
+
+export interface ScoredSuggestion {
+  block: QuestionBankItem
+  fit_score: number
+  reasons: string[]
+}
+
+export interface IllustrationSuggestion {
+  id: string
+  title: string
+  url: string
+  source: 'builtin_svg' | 'wikimedia'
+  print_score: number
+  reasons: string[]
 }

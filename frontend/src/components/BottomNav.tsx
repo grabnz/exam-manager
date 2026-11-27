@@ -10,6 +10,7 @@ export default function BottomNav() {
   // Keep score entry, print, login, and password change full-screen
   if (
     pathname.startsWith('/sessions/') ||
+    pathname.startsWith('/exams/') ||
     pathname.startsWith('/login') ||
     pathname.startsWith('/change-password')
   ) {

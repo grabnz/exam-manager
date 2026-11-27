@@ -6,7 +6,7 @@ import { useAuth } from '../auth'
 import {
   SearchIcon, SchoolIcon, ClockIcon, CalendarIcon, FolderIcon,
   ShieldIcon, UserIcon, UsersIcon, LinkIcon, GridIcon, SettingsIcon,
-  KeyIcon, XIcon, ChevronLeftIcon,
+  KeyIcon, XIcon, ChevronLeftIcon, FileIcon,
 } from './icons'
 
 interface PaletteItem {
@@ -41,6 +41,7 @@ export default function CommandPalette({
   const items = useMemo<PaletteItem[]>(() => {
     const nav: PaletteItem[] = [
       { id: 'home', label: 'الرئيسية', hint: 'لوحة المتابعة', group: 'التنقل', to: '/', Icon: SchoolIcon },
+      { id: 'exams', label: 'خزينة الامتحانات', hint: 'أرشيف السنوات، المحرر، وبنك التمارين', group: 'التنقل', to: '/exams', Icon: FileIcon },
       { id: 'timetable', label: 'جدول الأوقات', hint: 'الحصص والقاعات', group: 'التنقل', to: '/timetable', Icon: ClockIcon },
       { id: 'calendar', label: 'الروزنامة', hint: 'المواعيد والأحداث', group: 'التنقل', to: '/calendar', Icon: CalendarIcon },
       { id: 'documents', label: 'الوثائق الرسمية', hint: 'المذكرات والمنشورات', group: 'التنقل', to: '/documents', Icon: FolderIcon },

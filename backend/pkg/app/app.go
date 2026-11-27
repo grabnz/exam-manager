@@ -40,6 +40,7 @@ func New() (http.Handler, error) {
 	sessionsH := &handlers.SessionsHandler{DB: conn}
 	scoresH := &handlers.ScoresHandler{DB: conn}
 	profileH := &handlers.ProfileHandler{DB: conn}
+	examsH := &handlers.ExamsHandler{DB: conn}
 
 	requireUser := func(fn http.HandlerFunc) http.HandlerFunc {
 		return auth.RequireAuth(conn, fn)
@@ -146,6 +147,23 @@ func New() (http.Handler, error) {
 	// Profile
 	mux.HandleFunc("GET /api/profile", requireUser(profileH.Get))
 	mux.HandleFunc("PUT /api/profile", requireUser(profileH.Update))
+
+	// French Exam Studio, Yearly Archive, Exercise Bank, ML Suggestions & Illustrations
+	mux.HandleFunc("GET /api/exams", requireUser(examsH.List))
+	mux.HandleFunc("POST /api/exams", requireUser(examsH.Create))
+	mux.HandleFunc("POST /api/exams/generate", requireUser(examsH.GenerateExam))
+	mux.HandleFunc("POST /api/exams/upload-legacy", requireUser(examsH.UploadLegacy))
+	mux.HandleFunc("GET /api/exams/{exam_id}", requireUser(examsH.Get))
+	mux.HandleFunc("PUT /api/exams/{exam_id}", requireUser(examsH.Update))
+	mux.HandleFunc("DELETE /api/exams/{exam_id}", requireUser(examsH.Delete))
+	mux.HandleFunc("POST /api/exams/{exam_id}/clone", requireUser(examsH.Clone))
+	mux.HandleFunc("GET /api/exams/{exam_id}/attachment", requireUser(examsH.DownloadAttachment))
+	mux.HandleFunc("GET /api/question-bank", requireUser(examsH.ListBank))
+	mux.HandleFunc("POST /api/question-bank", requireUser(examsH.CreateBankBlock))
+	mux.HandleFunc("DELETE /api/question-bank/{block_id}", requireUser(examsH.DeleteBankBlock))
+	mux.HandleFunc("POST /api/question-bank/suggest", requireUser(examsH.SuggestBlocks))
+	mux.HandleFunc("POST /api/question-bank/{block_id}/feedback", requireUser(examsH.RecordFeedback))
+	mux.HandleFunc("GET /api/illustrations/search", requireUser(examsH.SearchIllustrations))
 
 	return httpx.CORS(httpx.Recover(mux)), nil
 }

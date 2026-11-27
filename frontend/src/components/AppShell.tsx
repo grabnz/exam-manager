@@ -6,7 +6,7 @@ import { useAuth } from '../auth'
 import CommandPalette from './CommandPalette'
 import {
   SchoolIcon, ClockIcon, CalendarIcon, FolderIcon, ShieldIcon,
-  UserIcon, KeyIcon, LogOutIcon, BookOpenIcon, SearchIcon,
+  UserIcon, KeyIcon, LogOutIcon, BookOpenIcon, SearchIcon, FileIcon,
 } from './icons'
 
 export default function AppShell({
@@ -46,6 +46,7 @@ export default function AppShell({
 
   const navItems = [
     { to: '/', label: 'الرئيسية', Icon: SchoolIcon, end: true },
+    { to: '/exams', label: 'خزينة الامتحانات', Icon: FileIcon, end: false },
     { to: '/timetable', label: 'جدول الأوقات', Icon: ClockIcon, end: false },
     { to: '/calendar', label: 'الروزنامة', Icon: CalendarIcon, end: false },
     { to: '/documents', label: 'الوثائق الرسمية', Icon: FolderIcon, end: false },

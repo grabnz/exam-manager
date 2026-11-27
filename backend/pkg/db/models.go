@@ -404,3 +404,66 @@ func (s *ExamSession) BeforeCreate(_ *gorm.DB) error {
 	}
 	return nil
 }
+
+// ExamPaper stores a structured or archived yearly exam paper (French/Arabic).
+type ExamPaper struct {
+	ID              string    `gorm:"primaryKey;type:text"`
+	OwnerID         string    `gorm:"not null;index"`
+	Title           string    `gorm:"not null"`
+	SchoolYear      string    `gorm:"not null;index"`
+	Level           string    `gorm:"not null;default:'4ème année'"`
+	SubjectCode     string    `gorm:"not null;default:'francais'"`
+	Trimester       int       `gorm:"not null;default:1"`
+	ModuleNum       int       `gorm:"not null;default:0"`
+	ExamType        string    `gorm:"not null;default:'Évaluation'"`
+	Direction       string    `gorm:"not null;default:'ltr'"`
+	BlocksJSON      string    `gorm:"type:text;not null;default:'[]'"`
+	TotalPoints     float64   `gorm:"not null;default:20"`
+	UsedCount       int       `gorm:"not null;default:0"`
+	AvgScore        *float64  `gorm:"type:double precision"`
+	SourceFileName  string    `gorm:"default:''"`
+	SourceFileType  string    `gorm:"default:''"`
+	SourceFileData  []byte    `gorm:"type:bytea"`
+	CreatedAt       time.Time `gorm:"autoCreateTime"`
+	UpdatedAt       time.Time `gorm:"autoUpdateTime"`
+	Owner           *User     `gorm:"foreignKey:OwnerID"`
+}
+
+func (e *ExamPaper) BeforeCreate(_ *gorm.DB) error {
+	if e.ID == "" {
+		e.ID = newID()
+	}
+	return nil
+}
+
+// QuestionBlock stores a reusable exercise block in the teacher's Exercise Bank
+// along with empirical difficulty and teacher accept/skip signals for ML scoring.
+type QuestionBlock struct {
+	ID                string    `gorm:"primaryKey;type:text"`
+	OwnerID           *string   `gorm:"type:text;index"` // nil = shared starter bank
+	Section           string    `gorm:"not null;default:'langue'"` // lecture | langue | production
+	BlockType         string    `gorm:"not null;default:'open_question'"`
+	Level             string    `gorm:"not null;default:'4ème année'"`
+	SubjectCode       string    `gorm:"not null;default:'francais'"`
+	Trimester         int       `gorm:"not null;default:1"`
+	ModuleNum         int       `gorm:"not null;default:0"`
+	Criterion         string    `gorm:"not null;default:'C1'"`
+	Points            float64   `gorm:"not null;default:2"`
+	Difficulty        string    `gorm:"not null;default:'medium'"` // easy | medium | hard
+	EmpiricalPassRate *float64  `gorm:"type:double precision"`       // 0..1 calibrated from real scores
+	Topic             string    `gorm:"default:''"`
+	ContentJSON       string    `gorm:"type:text;not null;default:'{}'"`
+	TimesUsed         int       `gorm:"not null;default:0"`
+	TimesAccepted     int       `gorm:"not null;default:0"`
+	TimesSkipped      int       `gorm:"not null;default:0"`
+	LastUsedYear      string    `gorm:"default:''"`
+	CreatedAt         time.Time `gorm:"autoCreateTime"`
+	UpdatedAt         time.Time `gorm:"autoUpdateTime"`
+}
+
+func (q *QuestionBlock) BeforeCreate(_ *gorm.DB) error {
+	if q.ID == "" {
+		q.ID = newID()
+	}
+	return nil
+}
