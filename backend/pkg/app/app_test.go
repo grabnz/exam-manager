@@ -530,6 +530,23 @@ func TestFrenchExamStudioAndBank(t *testing.T) {
 		t.Fatalf("expected consecutive generated exams to vary exercises, but all %d blocks matched", totalB)
 	}
 
+	// 2c. dry_run: true generates a 20/20 draft WITHOUT persisting to DB
+	listBefore := doReq(t, h, "GET", "/api/exams", tok, nil)
+	var beforePapers []map[string]any
+	_ = json.Unmarshal(listBefore.Body.Bytes(), &beforePapers)
+	recDry := doReq(t, h, "POST", "/api/exams/generate", tok, map[string]any{
+		"level": "4ème année", "trimester": 1, "module_num": 2, "school_year": "2026-2027", "dry_run": true,
+	})
+	if recDry.Code != 200 {
+		t.Fatalf("dry_run generate: got %d: %s", recDry.Code, recDry.Body.String())
+	}
+	listAfter := doReq(t, h, "GET", "/api/exams", tok, nil)
+	var afterPapers []map[string]any
+	_ = json.Unmarshal(listAfter.Body.Bytes(), &afterPapers)
+	if len(afterPapers) != len(beforePapers) {
+		t.Fatalf("dry_run should not store exam in DB: before=%d after=%d", len(beforePapers), len(afterPapers))
+	}
+
 	// 3. ML Suggestions return non-empty scored blocks even when excluding generated bank IDs
 	exclude := []string{}
 	for _, b := range gen.Blocks {

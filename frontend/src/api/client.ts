@@ -595,7 +595,7 @@ export const api = {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data),
       }),
-    generate: (data: { title?: string; school_year?: string; level?: string; trimester?: number; module_num?: number; exam_type?: string }) =>
+    generate: (data: { title?: string; school_year?: string; level?: string; trimester?: number; module_num?: number; exam_type?: string; dry_run?: boolean }) =>
       req<ExamPaper>('/exams/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

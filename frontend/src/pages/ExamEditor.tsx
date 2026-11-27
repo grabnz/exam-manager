@@ -111,10 +111,12 @@ export default function ExamEditor() {
   const qc = useQueryClient()
   const ui = useUI()
 
+  const isDraft = id === 'new'
+
   const { data: paper, isLoading } = useQuery<ExamPaper>({
     queryKey: ['exam', id],
     queryFn: () => api.exams.get(id!),
-    enabled: !!id,
+    enabled: !!id && !isDraft,
   })
 
   const [title, setTitle] = useState('')
@@ -156,6 +158,27 @@ export default function ExamEditor() {
   const activeModule = useMemo(() => getModuleInfo(level, moduleNum), [level, moduleNum])
 
   useEffect(() => {
+    if (isDraft) {
+      try {
+        const raw = sessionStorage.getItem('exam_draft_v1')
+        if (raw) {
+          const d = JSON.parse(raw)
+          setTitle(d.title || 'Évaluation de Français — 4ème année')
+          setSchoolYear(d.school_year || '2026-2027')
+          setLevel(d.level || '4ème année')
+          setTrimester(d.trimester || 1)
+          setModuleNum(d.module_num ?? 1)
+          setExamType(d.exam_type || 'Évaluation')
+          setBlocks(Array.isArray(d.blocks) ? d.blocks : [])
+        } else {
+          setTitle('Évaluation de Français — 4ème année')
+        }
+      } catch {
+        setTitle('Évaluation de Français — 4ème année')
+      }
+      setHydrated(true)
+      return
+    }
     if (!paper) return
     setTitle(paper.title)
     setSchoolYear(paper.school_year)
@@ -165,7 +188,7 @@ export default function ExamEditor() {
     setExamType(paper.exam_type)
     setBlocks(Array.isArray(paper.blocks) ? paper.blocks : [])
     setHydrated(true)
-  }, [paper])
+  }, [paper, isDraft])
 
   const loadSuggestions = async (sec = suggestSec) => {
     setLoadingSuggest(true)
@@ -279,43 +302,30 @@ export default function ExamEditor() {
   }
 
   useEffect(() => {
-    if (paper) {
+    if (hydrated) {
       void searchImages('', false)
       void loadSavedImgs()
       void loadArchiveList()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [paper?.id])
+  }, [hydrated, id])
 
-  // Refresh ML suggestions once paper is hydrated and whenever level/trimester/module changes
+  // Refresh ML suggestions once hydrated and whenever level/trimester/module changes
   useEffect(() => {
     if (!hydrated) return
     void loadSuggestions(suggestSec)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hydrated, level, trimester, moduleNum, suggestSec])
 
-  // Debounced auto-save so refreshing the page never loses edits
+  // Keep unsaved draft only in local sessionStorage (NEVER stored in DB until clicking "حفظ")
   useEffect(() => {
-    if (!hydrated || !id) return
-    const timer = setTimeout(() => {
-      void api.exams.update(id, {
-        title,
-        school_year: schoolYear,
-        level,
-        trimester,
-        module_num: moduleNum,
-        exam_type: examType,
-        direction: 'ltr',
-        blocks,
-        total_points: pointsSummary.total || 20,
-      }).then(() => {
-        setSavedFlag(true)
-        setTimeout(() => setSavedFlag(false), 1400)
-      }).catch(() => {})
-    }, 1800)
-    return () => clearTimeout(timer)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [title, schoolYear, level, trimester, moduleNum, examType, blocks])
+    if (!hydrated || !isDraft) return
+    try {
+      sessionStorage.setItem('exam_draft_v1', JSON.stringify({
+        title, school_year: schoolYear, level, trimester, module_num: moduleNum, exam_type: examType, blocks,
+      }))
+    } catch {}
+  }, [hydrated, isDraft, title, schoolYear, level, trimester, moduleNum, examType, blocks])
 
   const pointsSummary = useMemo(() => {
     let lecture = 0, langue = 0, production = 0
@@ -331,24 +341,44 @@ export default function ExamEditor() {
     return { lecture, langue, production, total: +(lecture + langue + production).toFixed(2) }
   }, [blocks])
 
-  async function handleSave(saveToBank = false) {
-    if (!id) return
+  async function handleSave(saveToBank = false): Promise<string | null> {
+    if (!id) return null
     setSaving(true)
     try {
-      await api.exams.update(id, {
-        title,
-        school_year: schoolYear,
-        level,
-        trimester,
-        module_num: moduleNum,
-        exam_type: examType,
-        direction: 'ltr',
-        blocks,
-        total_points: pointsSummary.total || 20,
-        save_to_bank: saveToBank,
-      })
-      await qc.invalidateQueries({ queryKey: ['exam', id] })
-      await qc.invalidateQueries({ queryKey: ['exams'] })
+      let savedId = id
+      if (isDraft) {
+        const created = await api.exams.create({
+          title,
+          school_year: schoolYear,
+          level,
+          trimester,
+          module_num: moduleNum,
+          exam_type: examType,
+          direction: 'ltr',
+          blocks,
+          total_points: pointsSummary.total || 20,
+          save_to_bank: saveToBank,
+        })
+        savedId = created.id
+        sessionStorage.removeItem('exam_draft_v1')
+        await qc.invalidateQueries({ queryKey: ['exams'] })
+        navigate(`/exams/${created.id}`, { replace: true })
+      } else {
+        await api.exams.update(id, {
+          title,
+          school_year: schoolYear,
+          level,
+          trimester,
+          module_num: moduleNum,
+          exam_type: examType,
+          direction: 'ltr',
+          blocks,
+          total_points: pointsSummary.total || 20,
+          save_to_bank: saveToBank,
+        })
+        await qc.invalidateQueries({ queryKey: ['exam', id] })
+        await qc.invalidateQueries({ queryKey: ['exams'] })
+      }
       if (saveToBank) {
         await qc.invalidateQueries({ queryKey: ['question-bank'] })
         ui.toast('تم حفظ الامتحان وإضافة تمارينه إلى بنك التمارين', 'success')
@@ -356,8 +386,10 @@ export default function ExamEditor() {
         setSavedFlag(true)
         setTimeout(() => setSavedFlag(false), 2000)
       }
+      return savedId
     } catch (err: any) {
       ui.toast(err.message || 'فشل الحفظ', 'error')
+      return null
     } finally {
       setSaving(false)
     }
@@ -408,7 +440,7 @@ export default function ExamEditor() {
     }
   }
 
-  if (isLoading || !paper) {
+  if (!isDraft && (isLoading || !paper)) {
     return (
       <div className="min-h-screen bg-canvas flex items-center justify-center">
         <div className="animate-spin w-8 h-8 border-4 border-brand border-t-transparent rounded-full" />
@@ -424,7 +456,7 @@ export default function ExamEditor() {
       <header className="bg-surface/95 backdrop-blur border-b border-line px-4 md:px-6 py-3 sticky top-0 z-20 shadow-card">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 flex-wrap">
           <div className="flex items-center gap-3 min-w-0">
-            <button onClick={() => navigate('/exams')}
+            <button onClick={() => { if (isDraft) sessionStorage.removeItem('exam_draft_v1'); navigate('/exams') }}
                     className="arabic inline-flex items-center gap-1 text-xs text-ink-muted hover:text-brand font-semibold">
               <ArrowRightIcon className="w-4 h-4" /> الخزينة
             </button>
@@ -434,6 +466,11 @@ export default function ExamEditor() {
               dir="ltr"
               className="text-sm md:text-base font-bold text-ink bg-canvas/60 border border-line rounded-xl px-3 py-1.5 w-60 md:w-80 focus:bg-surface focus:outline-none focus:ring-2 focus:ring-brand/40"
             />
+            {isDraft && (
+              <span className="arabic text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200 px-2.5 py-1 rounded-full">
+                مسودة غير محفوظة
+              </span>
+            )}
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
@@ -445,13 +482,25 @@ export default function ExamEditor() {
               <BookOpenIcon className="w-3.5 h-3.5 text-brand" /> حفظ في بنك التمارين
             </button>
             <button
-              onClick={async () => { await handleSave(false); window.open(`/exams/${id}/print?mode=student`, '_blank') }}
+              onClick={() => {
+                if (isDraft) {
+                  ui.toast('اضغطوا على «حفظ» أولاً لتخزين الامتحان قبل الطباعة', 'info')
+                  return
+                }
+                window.open(`/exams/${id}/print?mode=student`, '_blank')
+              }}
               className="arabic inline-flex items-center gap-1.5 text-xs bg-surface border border-line hover:border-brand/40 text-ink px-3 py-2 rounded-xl font-medium transition"
             >
               <PrinterIcon className="w-3.5 h-3.5 text-brand" /> ورقة التلميذ (A4)
             </button>
             <button
-              onClick={async () => { await handleSave(false); window.open(`/exams/${id}/print?mode=key`, '_blank') }}
+              onClick={() => {
+                if (isDraft) {
+                  ui.toast('اضغطوا على «حفظ» أولاً لتخزين الامتحان قبل الطباعة', 'info')
+                  return
+                }
+                window.open(`/exams/${id}/print?mode=key`, '_blank')
+              }}
               className="arabic inline-flex items-center gap-1.5 text-xs bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 text-emerald-800 px-3 py-2 rounded-xl font-semibold transition"
             >
               <PrinterIcon className="w-3.5 h-3.5" /> ورقة الإصلاح (Corrigé)

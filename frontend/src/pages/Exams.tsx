@@ -78,8 +78,8 @@ export default function Exams() {
     return [...map.entries()].sort((a, b) => b[0].localeCompare(a[0]))
   }, [exams])
 
-  async function createBlank() {
-    const created = await api.exams.create({
+  function createBlank() {
+    const draft = {
       title: `Évaluation de Français — ${filterLevel || '4ème année'}`,
       school_year: currentSchoolYear(),
       level: filterLevel || '4ème année',
@@ -89,9 +89,9 @@ export default function Exams() {
       direction: 'ltr',
       blocks: [],
       total_points: 20,
-    })
-    await qc.invalidateQueries({ queryKey: ['exams'] })
-    navigate(`/exams/${created.id}`)
+    }
+    sessionStorage.setItem('exam_draft_v1', JSON.stringify(draft))
+    navigate('/exams/new')
   }
 
   async function createExamFromSelectedBank() {
@@ -471,9 +471,9 @@ export default function Exams() {
           onClose={() => setGenOpen(false)}
           onGenerated={async (ex) => {
             setGenOpen(false)
-            await qc.invalidateQueries({ queryKey: ['exams'] })
-            ui.toast('تم توليد امتحان فرنسية متوازن بنجاح', 'success')
-            navigate(`/exams/${ex.id}`)
+            sessionStorage.setItem('exam_draft_v1', JSON.stringify(ex))
+            ui.toast('تم توليد مسودة امتحان (20/20) — اضغطوا على «حفظ» لتخزينه في الخزينة', 'success')
+            navigate('/exams/new')
           }}
         />
       )}
@@ -501,6 +501,7 @@ function GenerateExamModal({ defaultLevel, defaultTrim, onClose, onGenerated }: 
         trimester,
         module_num: moduleNum,
         exam_type: examType,
+        dry_run: true,
       })
       await onGenerated(ex)
     } finally {

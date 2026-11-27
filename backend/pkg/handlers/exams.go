@@ -892,6 +892,7 @@ func (h *ExamsHandler) GenerateExam(w http.ResponseWriter, r *http.Request) {
 		Trimester  int    `json:"trimester"`
 		ModuleNum  int    `json:"module_num"`
 		ExamType   string `json:"exam_type"`
+		DryRun     bool   `json:"dry_run"`
 	}
 	_ = httpx.DecodeJSON(r, &req)
 	if req.SchoolYear == "" {
@@ -1157,6 +1158,10 @@ func (h *ExamsHandler) GenerateExam(w http.ResponseWriter, r *http.Request) {
 		BlocksJSON:  string(blocksBytes),
 		TotalPoints: totalPts,
 		UsedCount:   1,
+	}
+	if req.DryRun {
+		httpx.WriteJSON(w, http.StatusOK, serializeExam(paper, true))
+		return
 	}
 	if err := h.DB.Create(&paper).Error; err != nil {
 		httpx.WriteError(w, http.StatusInternalServerError, err.Error())
