@@ -8,6 +8,7 @@ import (
 	"math"
 	"net/http"
 	"net/url"
+	"os"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -1081,6 +1082,94 @@ func (h *ExamsHandler) SearchIllustrations(w http.ResponseWriter, r *http.Reques
 		results = results[:12]
 	}
 	httpx.WriteJSON(w, http.StatusOK, results)
+}
+
+// GenerateIllustration dynamically generates a studio-grade Lofi Linear / Flat Art Adouci
+// French primary school illustration for ANY prompt using Gemini Image Generation (GEMINI_API_KEY).
+func (h *ExamsHandler) GenerateIllustration(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Prompt string `json:"prompt"`
+		BW     bool   `json:"bw"`
+	}
+	if err := httpx.DecodeJSON(r, &body); err != nil || strings.TrimSpace(body.Prompt) == "" {
+		httpx.WriteError(w, http.StatusBadRequest, "الرجاء كتابة وصف المشهد المطلوب")
+		return
+	}
+	apiKey := strings.TrimSpace(os.Getenv("GEMINI_API_KEY"))
+	if apiKey == "" {
+		httpx.WriteError(w, http.StatusServiceUnavailable, "مفتاح GEMINI_API_KEY غير مفعّل بعد على الخادم (Vercel) — أضيفوه لتفعيل التوليد التلقائي للرسوم بأسلوب Lofi Linear.")
+		return
+	}
+
+	style := "Studio-quality children's book illustration in warm French editorial lofi linear / flat art adouci style: delicate clean dark charcoal ink outlines, gentle muted pastel colors (soft teal, warm cream, sage green, blush peach), cozy minimal shading, pure clean white background (#FFFFFF), zero text or letters, 4:3 framing for a French primary school worksheet."
+	if body.BW {
+		style = "Studio-quality black and white ink line-art illustration in warm French editorial lofi linear textbook style: delicate clean charcoal outlines on pure white (#FFFFFF) background, no grey background, photocopy-ready coloring-book style, zero text or letters, 4:3 framing for a French primary school worksheet."
+	}
+	fullPrompt := style + " Scene: " + strings.TrimSpace(body.Prompt)
+
+	payload := map[string]any{
+		"contents": []map[string]any{
+			{"parts": []map[string]any{{"text": fullPrompt}}},
+		},
+		"generationConfig": map[string]any{
+			"responseModalities": []string{"IMAGE"},
+		},
+	}
+	rawReq, _ := json.Marshal(payload)
+
+	endpoint := "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-image:generateContent?key=" + url.QueryEscape(apiKey)
+	client := &http.Client{Timeout: 35 * time.Second}
+	resp, err := client.Post(endpoint, "application/json", bytes.NewReader(rawReq))
+	if err != nil {
+		httpx.WriteError(w, http.StatusBadGateway, "تعذّر الاتصال بخدمة توليد الصور")
+		return
+	}
+	defer resp.Body.Close()
+
+	var gemResp struct {
+		Candidates []struct {
+			Content struct {
+				Parts []struct {
+					InlineData *struct {
+						MimeType string `json:"mimeType"`
+						Data     string `json:"data"`
+					} `json:"inlineData"`
+				} `json:"parts"`
+			} `json:"content"`
+		} `json:"candidates"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&gemResp); err != nil {
+		httpx.WriteError(w, http.StatusBadGateway, "استجابة غير صالحة من خدمة الصور")
+		return
+	}
+	if gemResp.Error != nil {
+		httpx.WriteError(w, http.StatusBadGateway, gemResp.Error.Message)
+		return
+	}
+	for _, cand := range gemResp.Candidates {
+		for _, part := range cand.Content.Parts {
+			if part.InlineData != nil && part.InlineData.Data != "" {
+				mt := part.InlineData.MimeType
+				if mt == "" {
+					mt = "image/png"
+				}
+				dataURI := fmt.Sprintf("data:%s;base64,%s", mt, part.InlineData.Data)
+				httpx.WriteJSON(w, http.StatusOK, illustrationSuggestion{
+					ID:         fmt.Sprintf("gen-%d", time.Now().UnixNano()),
+					Title:      strings.TrimSpace(body.Prompt),
+					URL:        dataURI,
+					Source:     "lofi_ai",
+					PrintScore: 99,
+					Reasons:    []string{"Lofi Linear · Flat Art Adouci", "مولّد تلقائياً للمشهد"},
+				})
+				return
+			}
+		}
+	}
+	httpx.WriteError(w, http.StatusBadGateway, "لم يتم إرجاع صورة من النموذج")
 }
 
 func searchArasaac(query string, bw bool) []illustrationSuggestion {

@@ -90,6 +90,7 @@ export default function ExamEditor() {
   const [imgBW, setImgBW] = useState(false)
   const [imgResults, setImgResults] = useState<IllustrationSuggestion[]>([])
   const [loadingImg, setLoadingImg] = useState(false)
+  const [generatingImg, setGeneratingImg] = useState(false)
   const [activeImageTarget, setActiveImageTarget] = useState<string | null>(null) // block id
 
   const levelModules = useMemo(() => getModulesForLevel(level), [level])
@@ -136,6 +137,24 @@ export default function ExamEditor() {
       setImgResults([])
     } finally {
       setLoadingImg(false)
+    }
+  }
+
+  const generateLofiImage = async (promptText: string) => {
+    const clean = promptText.trim()
+    if (!clean) {
+      ui.toast('اكتبوا وصف المشهد بالفرنسية أو العربية أولاً', 'info')
+      return
+    }
+    setGeneratingImg(true)
+    try {
+      const res = await api.illustrations.generate(clean, imgBW)
+      setImgResults(prev => [res, ...prev.filter(x => x.id !== res.id)])
+      ui.toast('تم توليد رسم Lofi Linear بنجاح — اضغطوا عليه لإدراجه', 'success')
+    } catch (err: any) {
+      ui.toast(err.message || 'تعذّر توليد الرسم', 'error')
+    } finally {
+      setGeneratingImg(false)
     }
   }
 
@@ -524,21 +543,32 @@ export default function ExamEditor() {
             <div className="space-y-3">
               <form
                 onSubmit={e => { e.preventDefault(); void searchImages(imgQuery, imgBW) }}
-                className="flex gap-1.5"
+                className="space-y-2"
               >
-                <div className="relative flex-1">
-                  <SearchIcon className="w-3.5 h-3.5 text-ink-subtle absolute right-2.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    value={imgQuery}
-                    onChange={e => setImgQuery(e.target.value)}
-                    placeholder="famille, école, oiseau, jardin…"
-                    dir="ltr"
-                    className="w-full bg-canvas border border-line rounded-xl pr-8 pl-2.5 py-1.5 text-xs focus:bg-surface focus:outline-none"
-                  />
+                <div className="flex gap-1.5">
+                  <div className="relative flex-1">
+                    <SearchIcon className="w-3.5 h-3.5 text-ink-subtle absolute right-2.5 top-1/2 -translate-y-1/2" />
+                    <input
+                      value={imgQuery}
+                      onChange={e => setImgQuery(e.target.value)}
+                      placeholder="صف أي مشهد: un enfant arrose les fleurs…"
+                      dir="ltr"
+                      className="w-full bg-canvas border border-line rounded-xl pr-8 pl-2.5 py-1.5 text-xs focus:bg-surface focus:outline-none"
+                    />
+                  </div>
+                  <button type="submit" disabled={loadingImg}
+                          className="arabic px-3 py-1.5 bg-canvas border border-line hover:border-brand/40 text-ink rounded-xl text-xs font-semibold">
+                    {loadingImg ? '…' : 'بحث'}
+                  </button>
                 </div>
-                <button type="submit" disabled={loadingImg}
-                        className="arabic px-3 py-1.5 bg-brand text-white rounded-xl text-xs font-semibold">
-                  {loadingImg ? '…' : 'بحث'}
+                <button
+                  type="button"
+                  disabled={generatingImg || !imgQuery.trim()}
+                  onClick={() => void generateLofiImage(imgQuery)}
+                  className="arabic w-full py-2 bg-brand hover:bg-brand-hover disabled:bg-gray-300 text-white rounded-xl text-xs font-semibold shadow-sm transition inline-flex items-center justify-center gap-1.5"
+                >
+                  <SparklesIcon className={`w-3.5 h-3.5 ${generatingImg ? 'animate-spin' : ''}`} />
+                  <span>{generatingImg ? 'جاري رسم المشهد بأسلوب Lofi…' : 'توليد رسم Lofi تلقائي لهذا المشهد (AI)'}</span>
                 </button>
               </form>
 
