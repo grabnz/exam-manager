@@ -8,8 +8,9 @@ import {
 import { useUI } from '../components/ui'
 import {
   ArrowRightIcon, CheckIcon, PlusIcon, PrinterIcon, SparklesIcon,
-  TrashIcon, ImageIcon, SearchIcon, RefreshCwIcon, XIcon, BookOpenIcon,
+  TrashIcon, ImageIcon, SearchIcon, RefreshCwIcon, XIcon, BookOpenIcon, UploadIcon,
 } from '../components/icons'
+import { getModuleInfo, getModulesForLevel } from '../lib/tunisianFrenchProgram'
 
 const BLOCK_CATALOG: { type: ExamBlockType; section: 'lecture' | 'langue' | 'production'; label: string; crit: string; pts: number }[] = [
   { type: 'reading_text',      section: 'lecture',    label: 'Texte de lecture',       crit: 'C1', pts: 0 },
@@ -85,10 +86,14 @@ export default function ExamEditor() {
   const [suggestions, setSuggestions] = useState<ScoredSuggestion[]>([])
   const [loadingSuggest, setLoadingSuggest] = useState(false)
 
-  const [imgQuery, setImgQuery] = useState('jardin école')
+  const [imgQuery, setImgQuery] = useState('école')
+  const [imgBW, setImgBW] = useState(true)
   const [imgResults, setImgResults] = useState<IllustrationSuggestion[]>([])
   const [loadingImg, setLoadingImg] = useState(false)
   const [activeImageTarget, setActiveImageTarget] = useState<string | null>(null) // block id
+
+  const levelModules = useMemo(() => getModulesForLevel(level), [level])
+  const activeModule = useMemo(() => getModuleInfo(level, moduleNum), [level, moduleNum])
 
   useEffect(() => {
     if (!paper) return
@@ -122,10 +127,10 @@ export default function ExamEditor() {
     }
   }
 
-  const searchImages = async (q = imgQuery) => {
+  const searchImages = async (q = imgQuery, bw = imgBW) => {
     setLoadingImg(true)
     try {
-      const res = await api.illustrations.search(q)
+      const res = await api.illustrations.search(q, bw)
       setImgResults(Array.isArray(res) ? res : [])
     } catch {
       setImgResults([])
@@ -137,7 +142,7 @@ export default function ExamEditor() {
   useEffect(() => {
     if (paper) {
       void loadSuggestions('')
-      void searchImages('jardin école')
+      void searchImages('école', true)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paper?.id])
@@ -300,9 +305,22 @@ export default function ExamEditor() {
                     className="arabic bg-canvas border border-line rounded-xl px-2.5 py-1 font-medium">
               {[1, 2, 3].map(t => <option key={t} value={t}>الثلاثي {t}</option>)}
             </select>
-            <select value={moduleNum} onChange={e => setModuleNum(Number(e.target.value))} dir="ltr"
-                    className="bg-canvas border border-line rounded-xl px-2.5 py-1 font-medium">
-              {[0, 1, 2, 3, 4, 5, 6, 7, 8].map(m => <option key={m} value={m}>{m === 0 ? 'Tous modules' : `Module ${m}`}</option>)}
+            <select value={moduleNum} onChange={e => {
+                      const m = Number(e.target.value)
+                      setModuleNum(m)
+                      const info = getModuleInfo(level, m)
+                      if (info?.keywords[0]) {
+                        setImgQuery(info.keywords[0])
+                        void searchImages(info.keywords[0], imgBW)
+                      }
+                    }} dir="ltr"
+                    className="bg-canvas border border-line rounded-xl px-2.5 py-1 font-medium max-w-[260px]">
+              <option value={0}>Tous les modules</option>
+              {levelModules.map(m => (
+                <option key={m.num} value={m.num}>
+                  Module {m.num} (T{m.trimester}) — {m.title}
+                </option>
+              ))}
             </select>
             <input value={schoolYear} onChange={e => setSchoolYear(e.target.value)} dir="ltr"
                    className="bg-canvas border border-line rounded-xl px-2.5 py-1 w-24 text-center num" />
@@ -328,6 +346,25 @@ export default function ExamEditor() {
           </div>
         </div>
       </div>
+
+      {/* ── Official Tunisian Module Program Strip ── */}
+      {activeModule && (
+        <div className="bg-brand-light/45 border-b border-brand-mid px-4 md:px-6 py-2">
+          <div className="max-w-7xl mx-auto flex items-center justify-between gap-3 flex-wrap text-xs" dir="ltr">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-bold text-brand">Module {activeModule.num} : {activeModule.title}</span>
+              <span className="text-ink-muted">— {activeModule.theme}</span>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              {activeModule.langue.map((lg, i) => (
+                <span key={i} className="bg-surface border border-brand-mid text-brand px-2 py-0.5 rounded-full text-[11px] font-medium">
+                  {lg}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Main Workspace: Block Canvas + Right Smart Helper Drawer ── */}
       <div className="flex-1 max-w-7xl w-full mx-auto px-4 md:px-6 py-5 grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
@@ -486,7 +523,7 @@ export default function ExamEditor() {
           ) : (
             <div className="space-y-3">
               <form
-                onSubmit={e => { e.preventDefault(); void searchImages(imgQuery) }}
+                onSubmit={e => { e.preventDefault(); void searchImages(imgQuery, imgBW) }}
                 className="flex gap-1.5"
               >
                 <div className="relative flex-1">
@@ -494,7 +531,7 @@ export default function ExamEditor() {
                   <input
                     value={imgQuery}
                     onChange={e => setImgQuery(e.target.value)}
-                    placeholder="oiseau, jardin, école, famille…"
+                    placeholder="famille, école, oiseau, jardin…"
                     dir="ltr"
                     className="w-full bg-canvas border border-line rounded-xl pr-8 pl-2.5 py-1.5 text-xs focus:bg-surface focus:outline-none"
                   />
@@ -505,7 +542,52 @@ export default function ExamEditor() {
                 </button>
               </form>
 
-              <div className="grid grid-cols-2 gap-2 max-h-[60vh] overflow-y-auto pl-1">
+              {/* B&W print mode toggle + Upload own image */}
+              <div className="flex items-center justify-between gap-2 text-[11px]">
+                <label className="arabic flex items-center gap-1.5 text-ink-muted cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={imgBW}
+                    onChange={e => { setImgBW(e.target.checked); void searchImages(imgQuery, e.target.checked) }}
+                    className="accent-brand"
+                  />
+                  أبيض وأسود للطباعة
+                </label>
+                <label className="arabic inline-flex items-center gap-1 text-brand font-semibold hover:underline cursor-pointer">
+                  <UploadIcon className="w-3 h-3" /> صورة من جهازك
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={e => {
+                      const f = e.target.files?.[0]
+                      if (!f) return
+                      const reader = new FileReader()
+                      reader.onload = () => { if (typeof reader.result === 'string') insertIllustration(reader.result) }
+                      reader.readAsDataURL(f)
+                      e.target.value = ''
+                    }}
+                  />
+                </label>
+              </div>
+
+              {/* 1-click keyword chips from the active Tunisian Module */}
+              {activeModule && (
+                <div className="flex flex-wrap gap-1" dir="ltr">
+                  {activeModule.keywords.map(kw => (
+                    <button
+                      key={kw}
+                      type="button"
+                      onClick={() => { setImgQuery(kw); void searchImages(kw, imgBW) }}
+                      className="text-[10px] bg-brand-light/70 hover:bg-brand text-brand hover:text-white px-2 py-0.5 rounded-full font-semibold transition"
+                    >
+                      {kw}
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-2 max-h-[54vh] overflow-y-auto pl-1">
                 {imgResults.map(img => (
                   <button
                     key={img.id}

@@ -662,8 +662,8 @@ export const api = {
       }),
   },
   illustrations: {
-    search: (q: string) =>
-      req<IllustrationSuggestion[]>(`/illustrations/search?q=${encodeURIComponent(q)}`),
+    search: (q: string, bw = true) =>
+      req<IllustrationSuggestion[]>(`/illustrations/search?q=${encodeURIComponent(q)}&bw=${bw ? '1' : '0'}`),
   },
 }
 
@@ -753,7 +753,7 @@ export interface IllustrationSuggestion {
   id: string
   title: string
   url: string
-  source: 'builtin_svg' | 'wikimedia'
+  source: 'builtin_svg' | 'arasaac'
   print_score: number
   reasons: string[]
 }

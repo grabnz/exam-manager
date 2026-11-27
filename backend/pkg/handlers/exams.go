@@ -1040,16 +1040,22 @@ var builtinIllustrations = []struct {
 
 func (h *ExamsHandler) SearchIllustrations(w http.ResponseWriter, r *http.Request) {
 	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	bw := r.URL.Query().Get("bw") != "0" // default true: black & white for school photocopiers
 	qLow := strings.ToLower(q)
 	results := make([]illustrationSuggestion, 0)
 
-	// 1. Score built-in offline crisp line-art SVGs (always instant & photocopy-perfect)
+	// 1. Live ARASAAC European Educational Pictograms API (13,000+ kid-safe French school drawings)
+	if q != "" {
+		results = append(results, searchArasaac(q, bw)...)
+	}
+
+	// 2. Built-in offline crisp line-art SVGs (instant fallback & always works offline)
 	for _, item := range builtinIllustrations {
-		score := 72
+		score := 74
 		matched := false
 		for _, kw := range item.keywords {
 			if qLow != "" && (strings.Contains(qLow, kw) || strings.Contains(kw, qLow)) {
-				score = 97
+				score = 92
 				matched = true
 				break
 			}
@@ -1071,23 +1077,16 @@ func (h *ExamsHandler) SearchIllustrations(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	// 2. Live Wikimedia Commons open-license line-art / SVG search (best-effort, 3s timeout)
-	if q != "" {
-		wiki := searchWikimediaLineArt(q)
-		results = append(results, wiki...)
-	}
-
 	sort.Slice(results, func(i, j int) bool { return results[i].PrintScore > results[j].PrintScore })
-	if len(results) > 8 {
-		results = results[:8]
+	if len(results) > 12 {
+		results = results[:12]
 	}
 	httpx.WriteJSON(w, http.StatusOK, results)
 }
 
-func searchWikimediaLineArt(query string) []illustrationSuggestion {
-	client := &http.Client{Timeout: 3 * time.Second}
-	endpoint := "https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrlimit=6&prop=imageinfo&iiprop=url|mime|size&iiurlwidth=480&format=json&gsrsearch=" +
-		url.QueryEscape(query+" filetype:drawing|bitmap svg OR clipart")
+func searchArasaac(query string, bw bool) []illustrationSuggestion {
+	client := &http.Client{Timeout: 4 * time.Second}
+	endpoint := "https://api.arasaac.org/v1/pictograms/fr/search/" + url.PathEscape(query)
 	req, err := http.NewRequest("GET", endpoint, nil)
 	if err != nil {
 		return nil
@@ -1099,67 +1098,65 @@ func searchWikimediaLineArt(query string) []illustrationSuggestion {
 	}
 	defer resp.Body.Close()
 
-	var payload struct {
-		Query struct {
-			Pages map[string]struct {
-				PageID    int    `json:"pageid"`
-				Title     string `json:"title"`
-				ImageInfo []struct {
-					ThumbURL string `json:"thumburl"`
-					URL      string `json:"url"`
-					Mime     string `json:"mime"`
-					Width    int    `json:"width"`
-					Height   int    `json:"height"`
-				} `json:"imageinfo"`
-			} `json:"pages"`
-		} `json:"query"`
+	var items []struct {
+		ID       int  `json:"_id"`
+		Schematic bool `json:"schematic"`
+		Violence  bool `json:"violence"`
+		Sex       bool `json:"sex"`
+		Keywords []struct {
+			Keyword string `json:"keyword"`
+		} `json:"keywords"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+	if err := json.NewDecoder(resp.Body).Decode(&items); err != nil {
 		return nil
 	}
 
-	var out []illustrationSuggestion
-	for _, p := range payload.Query.Pages {
-		if len(p.ImageInfo) == 0 {
+	qLow := strings.ToLower(strings.TrimSpace(query))
+	out := make([]illustrationSuggestion, 0, len(items))
+	for _, it := range items {
+		if it.Violence || it.Sex || it.ID <= 0 {
 			continue
 		}
-		ii := p.ImageInfo[0]
-		imgURL := ii.ThumbURL
-		if imgURL == "" {
-			imgURL = ii.URL
+		label := query
+		exact := false
+		for _, kw := range it.Keywords {
+			if kw.Keyword != "" && label == query {
+				label = kw.Keyword
+			}
+			if strings.EqualFold(strings.TrimSpace(kw.Keyword), qLow) {
+				exact = true
+				label = kw.Keyword
+				break
+			}
 		}
-		if imgURL == "" {
-			continue
+		score := 84
+		reasons := []string{"رسم مدرسي تعليمي (ARASAAC)"}
+		if exact {
+			score += 11
+			reasons = append(reasons, "تطابق تام بالفرنسية")
 		}
-		score := 74
-		var reasons []string
-		titleClean := strings.TrimPrefix(p.Title, "File:")
-		low := strings.ToLower(titleClean)
-		if strings.Contains(ii.Mime, "svg") || strings.HasSuffix(low, ".svg") {
-			score += 14
-			reasons = append(reasons, "رسم متجهي SVG واضح")
-		}
-		if strings.Contains(low, "draw") || strings.Contains(low, "line") || strings.Contains(low, "clipart") || strings.Contains(low, "icon") {
-			score += 6
-			reasons = append(reasons, "مناسب للطباعة")
-		}
-		if ii.Width >= ii.Height && ii.Width > 0 {
+		if bw {
 			score += 3
+			reasons = append(reasons, "أبيض وأسود للطباعة")
 		}
-		if len(reasons) == 0 {
-			reasons = append(reasons, "مصدر تعليمي حر (Wikimedia)")
+		if score > 99 {
+			score = 99
 		}
-		if score > 96 {
-			score = 96
+		imgURL := fmt.Sprintf("https://static.arasaac.org/pictograms/%d/%d_300.png", it.ID, it.ID)
+		if bw {
+			imgURL = fmt.Sprintf("https://api.arasaac.org/v1/pictograms/%d?download=false&color=false", it.ID)
 		}
 		out = append(out, illustrationSuggestion{
-			ID:         fmt.Sprintf("wiki-%d", p.PageID),
-			Title:      titleClean,
+			ID:         fmt.Sprintf("arasaac-%d", it.ID),
+			Title:      label,
 			URL:        imgURL,
-			Source:     "wikimedia",
+			Source:     "arasaac",
 			PrintScore: score,
 			Reasons:    reasons,
 		})
+		if len(out) >= 10 {
+			break
+		}
 	}
 	return out
 }

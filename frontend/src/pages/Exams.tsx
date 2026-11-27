@@ -9,6 +9,7 @@ import {
   FileIcon, PlusIcon, SparklesIcon, UploadIcon, CopyIcon, PrinterIcon,
   TrashIcon, SearchIcon, DownloadIcon, BookOpenIcon, EditIcon,
 } from '../components/icons'
+import { getModulesForLevel } from '../lib/tunisianFrenchProgram'
 
 const LEVELS = ['3ème année', '4ème année', '5ème année', '6ème année']
 const TRIMESTERS = [1, 2, 3]
@@ -435,8 +436,10 @@ function GenerateExamModal({ defaultLevel, defaultTrim, onClose, onGenerated }: 
           <div>
             <label className="arabic block text-xs font-semibold text-ink-muted mb-1">الوحدة (Module)</label>
             <select value={moduleNum} onChange={e => setModuleNum(Number(e.target.value))} dir="ltr"
-                    className="w-full bg-canvas border border-line rounded-xl px-3 py-2 text-sm">
-              {[1, 2, 3, 4, 5, 6, 7, 8].map(m => <option key={m} value={m}>Module {m}</option>)}
+                    className="w-full bg-canvas border border-line rounded-xl px-3 py-2 text-xs">
+              {getModulesForLevel(level).map(m => (
+                <option key={m.num} value={m.num}>M{m.num} — {m.title}</option>
+              ))}
             </select>
           </div>
         </div>
