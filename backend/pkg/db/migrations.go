@@ -161,6 +161,9 @@ func Migrate(conn *gorm.DB) error {
 		}
 	}
 
+	// Guarantee newer tables exist even if GORM AutoMigrate hit a legacy association warning on Postgres
+	ensureModernTables(conn)
+
 	isPG := conn.Dialector.Name() == "postgres"
 	if isPG {
 		_ = conn.Exec("SELECT pg_advisory_lock(817223344)").Error
@@ -518,4 +521,72 @@ func BootstrapAdmin(conn *gorm.DB, hashFn func(string) (string, error)) error {
 
 func seedFrenchQuestionBank(tx *gorm.DB) error {
 	return EnsureFrenchQuestionBank(tx)
+}
+
+func ensureModernTables(conn *gorm.DB) {
+	stmts := []string{
+		`CREATE TABLE IF NOT EXISTS "timetable_slots" (
+			"id" text PRIMARY KEY,
+			"teacher_id" text NOT NULL,
+			"class_id" text,
+			"subject_id" text,
+			"day" integer NOT NULL,
+			"start" text NOT NULL,
+			"end" text NOT NULL,
+			"room" text DEFAULT '',
+			"label" text DEFAULT '',
+			"is_pinned" boolean NOT NULL DEFAULT false,
+			"created_at" timestamptz DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS "rooms" (
+			"id" text PRIMARY KEY,
+			"name" text NOT NULL UNIQUE,
+			"room_type" text NOT NULL DEFAULT 'standard',
+			"is_active" boolean NOT NULL DEFAULT true,
+			"created_at" timestamptz DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS "level_curricula" (
+			"id" text PRIMARY KEY,
+			"level" text NOT NULL,
+			"subject_id" text NOT NULL,
+			"weekly_hours" double precision NOT NULL DEFAULT 2,
+			"block_size" double precision NOT NULL DEFAULT 1,
+			"cognitive_weight" text NOT NULL DEFAULT 'heavy',
+			"room_type" text NOT NULL DEFAULT 'standard'
+		)`,
+		`CREATE TABLE IF NOT EXISTS "calendar_events" (
+			"id" text PRIMARY KEY,
+			"user_id" text NOT NULL,
+			"title" text NOT NULL,
+			"date" text NOT NULL,
+			"time" text,
+			"note" text DEFAULT '',
+			"color" text DEFAULT 'blue',
+			"is_school_wide" boolean NOT NULL DEFAULT false,
+			"created_at" timestamptz DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS "official_documents" (
+			"id" text PRIMARY KEY,
+			"title" text NOT NULL,
+			"category" text DEFAULT 'عام',
+			"description" text DEFAULT '',
+			"file_name" text NOT NULL,
+			"file_type" text DEFAULT 'application/octet-stream',
+			"file_size" integer NOT NULL DEFAULT 0,
+			"file_data" bytea NOT NULL,
+			"uploaded_by" text,
+			"created_at" timestamptz DEFAULT CURRENT_TIMESTAMP
+		)`,
+	}
+	if conn.Dialector.Name() == "postgres" {
+		stmts = append(stmts,
+			`ALTER TABLE "timetable_slots" ADD COLUMN IF NOT EXISTS "is_pinned" boolean NOT NULL DEFAULT false`,
+			`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "max_weekly_hours" double precision NOT NULL DEFAULT 18`,
+		)
+	}
+	for _, sql := range stmts {
+		if err := conn.Exec(sql).Error; err != nil {
+			log.Printf("[startup] ensureModernTables warning: %v", err)
+		}
+	}
 }
