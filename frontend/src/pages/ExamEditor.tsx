@@ -596,7 +596,12 @@ export default function ExamEditor() {
                     className="bg-canvas/60 border border-line hover:border-brand rounded-2xl p-2 text-right space-y-1.5 transition group"
                   >
                     <div className="bg-white rounded-xl border border-line h-24 flex items-center justify-center overflow-hidden p-1">
-                      <img src={img.url} alt={img.title} className="max-h-full max-w-full object-contain" />
+                      <img
+                        src={img.url}
+                        alt={img.title}
+                        loading="lazy"
+                        className={`max-h-full max-w-full object-contain ${imgBW && img.source === 'builtin_svg' ? 'grayscale contrast-125' : ''}`}
+                      />
                     </div>
                     <div className="flex items-center justify-between gap-1">
                       <span className="text-[10px] font-bold bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded-full num" dir="ltr">

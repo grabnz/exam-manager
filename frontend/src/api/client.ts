@@ -753,7 +753,7 @@ export interface IllustrationSuggestion {
   id: string
   title: string
   url: string
-  source: 'builtin_svg' | 'arasaac'
+  source: 'builtin_svg' | 'arasaac' | 'lofi_ai'
   print_score: number
   reasons: string[]
 }
