@@ -1099,9 +1099,53 @@ func (h *ExamsHandler) GenerateIllustration(w http.ResponseWriter, r *http.Reque
 	}
 	userPrompt := strings.TrimSpace(body.Prompt)
 
+	cfWorkerURL := strings.TrimSpace(os.Getenv("CLOUDFLARE_AI_WORKER_URL"))
+	cfWorkerSecret := strings.TrimSpace(os.Getenv("CLOUDFLARE_AI_WORKER_SECRET"))
 	cfAccount := strings.TrimSpace(os.Getenv("CLOUDFLARE_ACCOUNT_ID"))
 	cfToken := strings.TrimSpace(os.Getenv("CLOUDFLARE_API_TOKEN"))
 	geminiKey := strings.TrimSpace(os.Getenv("GEMINI_API_KEY"))
+
+	// 0. Prefer our dedicated free Cloudflare Workers AI proxy if configured
+	if cfWorkerURL != "" {
+		reqBody, _ := json.Marshal(map[string]any{"prompt": userPrompt, "bw": body.BW})
+		req, err := http.NewRequest("POST", cfWorkerURL, bytes.NewReader(reqBody))
+		if err != nil {
+			httpx.WriteError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		req.Header.Set("Content-Type", "application/json")
+		if cfWorkerSecret != "" {
+			req.Header.Set("X-AI-Secret", cfWorkerSecret)
+		}
+		client := &http.Client{Timeout: 30 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			httpx.WriteError(w, http.StatusBadGateway, "Cloudflare AI Worker: "+err.Error())
+			return
+		}
+		defer resp.Body.Close()
+		var wResp struct {
+			Image string `json:"image"`
+			Error string `json:"error"`
+		}
+		if err := json.NewDecoder(resp.Body).Decode(&wResp); err != nil || wResp.Image == "" {
+			msg := wResp.Error
+			if msg == "" {
+				msg = fmt.Sprintf("status %d", resp.StatusCode)
+			}
+			httpx.WriteError(w, http.StatusBadGateway, "Cloudflare AI: "+msg)
+			return
+		}
+		httpx.WriteJSON(w, http.StatusOK, illustrationSuggestion{
+			ID:         fmt.Sprintf("cfw-%d", time.Now().UnixNano()),
+			Title:      userPrompt,
+			URL:        wResp.Image,
+			Source:     "lofi_ai",
+			PrintScore: 99,
+			Reasons:    []string{"Lofi Linear · FLUX.1 Schnell", "مجاني عبر Cloudflare AI"},
+		})
+		return
+	}
 
 	if cfAccount == "" && cfToken == "" && geminiKey == "" {
 		httpx.WriteError(w, http.StatusServiceUnavailable, "أضيفوا CLOUDFLARE_ACCOUNT_ID و CLOUDFLARE_API_TOKEN (مجاني على Cloudflare Workers AI) في إعدادات Vercel لتفعيل التوليد التلقائي للرسوم.")
