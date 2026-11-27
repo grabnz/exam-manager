@@ -608,8 +608,17 @@ func (h *ExamsHandler) syncBlocksToBank(userID string, paper db.ExamPaper) {
 	}
 }
 
+func (h *ExamsHandler) ensureStarterBank() {
+	var starterCount int64
+	h.DB.Model(&db.QuestionBlock{}).Where("owner_id IS NULL").Count(&starterCount)
+	if starterCount < 15 {
+		_ = db.EnsureFrenchQuestionBank(h.DB)
+	}
+}
+
 func (h *ExamsHandler) ListBank(w http.ResponseWriter, r *http.Request) {
 	u := auth.UserFromContext(r.Context())
+	h.ensureStarterBank()
 	q := h.DB.Model(&db.QuestionBlock{}).Where("owner_id IS NULL OR owner_id = ?", u.ID)
 	if sec := strings.TrimSpace(r.URL.Query().Get("section")); sec != "" {
 		q = q.Where("section = ?", sec)
@@ -790,6 +799,7 @@ func scoreBlock(b db.QuestionBlock, level string, trimester int, moduleNum int, 
 
 func (h *ExamsHandler) SuggestBlocks(w http.ResponseWriter, r *http.Request) {
 	u := auth.UserFromContext(r.Context())
+	h.ensureStarterBank()
 	var req struct {
 		Level            string   `json:"level"`
 		Trimester        int      `json:"trimester"`
@@ -905,6 +915,8 @@ func (h *ExamsHandler) GenerateExam(w http.ResponseWriter, r *http.Request) {
 		req.Title = fmt.Sprintf("%s de Français — %s (T%d)", req.ExamType, req.Level, req.Trimester)
 	}
 
+	h.ensureStarterBank()
+
 	var bank []db.QuestionBlock
 	h.DB.Where("owner_id IS NULL OR owner_id = ?", u.ID).Find(&bank)
 
@@ -941,19 +953,28 @@ func (h *ExamsHandler) GenerateExam(w http.ResponseWriter, r *http.Request) {
 		return res
 	}
 
-	var chosen []db.QuestionBlock
-	chosen = append(chosen, pickSection("lecture", []string{"reading_text"}, 1)...)
-	chosen = append(chosen, pickSection("lecture", []string{"mcq", "true_false", "open_question"}, 3)...)
-	chosen = append(chosen, pickSection("langue", nil, 3)...)
-	chosen = append(chosen, pickSection("production", []string{"production_ecrite"}, 1)...)
-
-	blocks := make([]map[string]any, 0, len(chosen))
+	blocks := make([]map[string]any, 0, 10)
 	totalPts := 0.0
-	for i, b := range chosen {
+	appendHeader := func(sec, heading, subtitle string) {
+		blocks = append(blocks, map[string]any{
+			"id":        fmt.Sprintf("gen-hdr-%d", len(blocks)+1),
+			"section":   sec,
+			"type":      "section_header",
+			"criterion": "",
+			"points":    0,
+			"topic":     heading,
+			"content":   map[string]any{"heading": heading, "subtitle": subtitle},
+		})
+	}
+	appendBankBlock := func(b db.QuestionBlock) {
 		var content any
 		_ = json.Unmarshal([]byte(b.ContentJSON), &content)
+		shortID := b.ID
+		if len(shortID) > 6 {
+			shortID = shortID[:6]
+		}
 		blocks = append(blocks, map[string]any{
-			"id":        fmt.Sprintf("gen-%d-%s", i+1, b.ID[:6]),
+			"id":        fmt.Sprintf("gen-%d-%s", len(blocks)+1, shortID),
 			"bank_id":   b.ID,
 			"section":   b.Section,
 			"type":      b.BlockType,
@@ -964,6 +985,47 @@ func (h *ExamsHandler) GenerateExam(w http.ResponseWriter, r *http.Request) {
 		})
 		totalPts += b.Points
 	}
+
+	// I. Lecture — Compréhension (prefer integrated Texte + Questions block, fallback to reading_text + questions)
+	lectureComp := pickSection("lecture", []string{"reading_comprehension"}, 1)
+	if len(lectureComp) > 0 {
+		appendHeader("lecture", "I. LECTURE — COMPRÉHENSION", "Je lis attentivement le texte puis je réponds aux questions.")
+		appendBankBlock(lectureComp[0])
+	} else {
+		lectureText := pickSection("lecture", []string{"reading_text"}, 1)
+		lectureQs := pickSection("lecture", []string{"mcq", "true_false", "open_question"}, 3)
+		if len(lectureText) > 0 || len(lectureQs) > 0 {
+			appendHeader("lecture", "I. LECTURE — COMPRÉHENSION", "Je lis attentivement le texte puis je réponds aux questions.")
+			for _, b := range lectureText {
+				appendBankBlock(b)
+			}
+			for _, b := range lectureQs {
+				appendBankBlock(b)
+			}
+		}
+	}
+
+	// II. Langue (Grammaire, Conjugaison, Orthographe — aim for ~7-8 points across 2-3 varied exercises)
+	langueBlocks := pickSection("langue", nil, 3)
+	if len(langueBlocks) > 0 {
+		appendHeader("langue", "II. LANGUE", "Grammaire, conjugaison et orthographe.")
+		languePts := 0.0
+		for _, b := range langueBlocks {
+			if languePts >= 7 && len(langueBlocks) > 2 {
+				break
+			}
+			appendBankBlock(b)
+			languePts += b.Points
+		}
+	}
+
+	// III. Production Écrite (6 points)
+	prodBlocks := pickSection("production", []string{"production_ecrite"}, 1)
+	if len(prodBlocks) > 0 {
+		appendHeader("production", "III. PRODUCTION ÉCRITE", "J'observe les images et j'utilise la boîte à outils pour rédiger mon texte.")
+		appendBankBlock(prodBlocks[0])
+	}
+
 	if totalPts == 0 {
 		totalPts = 20
 	}

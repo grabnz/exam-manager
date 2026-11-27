@@ -209,12 +209,18 @@ export default function ExamEditor() {
 
   useEffect(() => {
     if (paper) {
-      void loadSuggestions('')
       void searchImages('', false)
       void loadSavedImgs()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paper?.id])
+
+  // Refresh ML suggestions once paper is hydrated and whenever level/trimester/module changes
+  useEffect(() => {
+    if (!hydrated) return
+    void loadSuggestions(suggestSec)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hydrated, level, trimester, moduleNum, suggestSec])
 
   // Debounced auto-save so refreshing the page never loses edits
   useEffect(() => {

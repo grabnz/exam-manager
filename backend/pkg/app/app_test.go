@@ -432,3 +432,94 @@ func TestEndToEndAPIParity(t *testing.T) {
 		t.Fatalf("delete user: got %d: %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestFrenchExamStudioAndBank(t *testing.T) {
+	t.Setenv("DATABASE_URL", "sqlite:///:memory:")
+	t.Setenv("SECRET_KEY", "test-secret")
+	t.Setenv("ADMIN_USERNAME", "admin")
+	t.Setenv("ADMIN_PASSWORD", "admin123")
+
+	h, err := app.New()
+	if err != nil {
+		t.Fatalf("app.New: %v", err)
+	}
+	rec := doReq(t, h, "POST", "/api/auth/login", "", map[string]string{
+		"username": "admin", "password": "admin123",
+	})
+	var loginRes struct{ Token string `json:"token"` }
+	_ = json.Unmarshal(rec.Body.Bytes(), &loginRes)
+	tok := loginRes.Token
+
+	// 1. Starter question bank is seeded (>= 20 French exercises across 3e-6e)
+	rec = doReq(t, h, "GET", "/api/question-bank", tok, nil)
+	if rec.Code != 200 {
+		t.Fatalf("question-bank: got %d: %s", rec.Code, rec.Body.String())
+	}
+	var bank []map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &bank)
+	if len(bank) < 20 {
+		t.Fatalf("expected >= 20 starter question bank blocks, got %d", len(bank))
+	}
+
+	// 2. Smart exam generation produces a complete structured exam with blocks & points
+	rec = doReq(t, h, "POST", "/api/exams/generate", tok, map[string]any{
+		"level": "4ème année", "trimester": 1, "module_num": 2, "school_year": "2026-2027",
+	})
+	if rec.Code != 201 {
+		t.Fatalf("generate exam: got %d: %s", rec.Code, rec.Body.String())
+	}
+	var gen struct {
+		ID          string           `json:"id"`
+		TotalPoints float64          `json:"total_points"`
+		Blocks      []map[string]any `json:"blocks"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &gen)
+	if len(gen.Blocks) < 6 {
+		t.Fatalf("expected >= 6 generated blocks (headers + exercises), got %d", len(gen.Blocks))
+	}
+	if gen.TotalPoints < 15 {
+		t.Fatalf("expected total_points >= 15, got %.2f", gen.TotalPoints)
+	}
+
+	// 3. ML Suggestions return non-empty scored blocks even when excluding generated bank IDs
+	exclude := []string{}
+	for _, b := range gen.Blocks {
+		if bid, ok := b["bank_id"].(string); ok && bid != "" {
+			exclude = append(exclude, bid)
+		}
+	}
+	rec = doReq(t, h, "POST", "/api/question-bank/suggest", tok, map[string]any{
+		"level": "4ème année", "trimester": 1, "module_num": 2, "current_year": "2026-2027",
+		"exclude_ids": exclude, "limit": 8,
+	})
+	if rec.Code != 200 {
+		t.Fatalf("suggest: got %d: %s", rec.Code, rec.Body.String())
+	}
+	var sug []struct {
+		FitScore int `json:"fit_score"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &sug)
+	if len(sug) < 5 {
+		t.Fatalf("expected >= 5 remaining suggestions, got %d", len(sug))
+	}
+	if sug[0].FitScore <= 0 {
+		t.Fatalf("expected positive fit_score, got %d", sug[0].FitScore)
+	}
+
+	// 4. Saved illustrations persist across requests
+	rec = doReq(t, h, "POST", "/api/illustrations/saved", tok, map[string]any{
+		"title": "Scène de classe", "data_url": "data:image/jpeg;base64,AAAA", "style": "lofi_pastel",
+	})
+	if rec.Code != 201 {
+		t.Fatalf("save illustration: got %d: %s", rec.Code, rec.Body.String())
+	}
+	rec = doReq(t, h, "GET", "/api/illustrations/saved", tok, nil)
+	if rec.Code != 200 {
+		t.Fatalf("list saved illustrations: got %d", rec.Code)
+	}
+	var saved []map[string]any
+	_ = json.Unmarshal(rec.Body.Bytes(), &saved)
+	if len(saved) != 1 {
+		t.Fatalf("expected 1 saved illustration, got %d", len(saved))
+	}
+}

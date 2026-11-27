@@ -167,23 +167,22 @@ func Migrate(conn *gorm.DB) error {
 		defer func() { _ = conn.Exec("SELECT pg_advisory_unlock(817223344)").Error }()
 	}
 
-	if err := once(conn, "seed_subjects_v1", seedSubjects); err != nil {
-		return err
+	seeds := []struct {
+		key string
+		fn  func(*gorm.DB) error
+	}{
+		{"seed_subjects_v1", seedSubjects},
+		{"seed_template_francais_v1", seedFrenchTemplate},
+		{"seed_school_settings_v1", seedSchoolSettings},
+		{"seed_templates_all_v1", seedAllSubjectTemplates},
+		{"seed_rooms_and_curriculum_v1", seedRoomsAndCurriculum},
+		{"seed_french_question_bank_v1", EnsureFrenchQuestionBank},
+		{"seed_french_question_bank_v2", EnsureFrenchQuestionBank},
 	}
-	if err := once(conn, "seed_template_francais_v1", seedFrenchTemplate); err != nil {
-		return err
-	}
-	if err := once(conn, "seed_school_settings_v1", seedSchoolSettings); err != nil {
-		return err
-	}
-	if err := once(conn, "seed_templates_all_v1", seedAllSubjectTemplates); err != nil {
-		return err
-	}
-	if err := once(conn, "seed_rooms_and_curriculum_v1", seedRoomsAndCurriculum); err != nil {
-		return err
-	}
-	if err := once(conn, "seed_french_question_bank_v1", seedFrenchQuestionBank); err != nil {
-		return err
+	for _, s := range seeds {
+		if err := once(conn, s.key, s.fn); err != nil {
+			log.Printf("[startup] seed %s warning: %v", s.key, err)
+		}
 	}
 	return nil
 }
@@ -517,67 +516,5 @@ func BootstrapAdmin(conn *gorm.DB, hashFn func(string) (string, error)) error {
 }
 
 func seedFrenchQuestionBank(tx *gorm.DB) error {
-	var count int64
-	tx.Model(&QuestionBlock{}).Count(&count)
-	if count > 0 {
-		return nil
-	}
-	starters := []QuestionBlock{
-		{
-			Section: "lecture", BlockType: "reading_text", Level: "4ème année", SubjectCode: "francais",
-			Trimester: 1, ModuleNum: 2, Criterion: "C1", Points: 0, Difficulty: "easy", Topic: "Le jardin de l'école",
-			ContentJSON: `{"title":"Le jardin de l'école","text":"Ce matin, les élèves de la quatrième année descendent dans la cour avec leur maîtresse. Sami apporte un petit arrosoir bleu et Lina plante des fleurs jaunes près du mur. Tous les enfants sont heureux car le jardin devient propre et coloré.","source":"Texte adapté — 4ème année"}`,
-		},
-		{
-			Section: "lecture", BlockType: "mcq", Level: "4ème année", SubjectCode: "francais",
-			Trimester: 1, ModuleNum: 2, Criterion: "C2", Points: 2, Difficulty: "easy", Topic: "Compréhension globale",
-			ContentJSON: `{"prompt":"Je coche la bonne réponse : Où vont les élèves ce matin ?","options":["À la bibliothèque","Dans la cour pour jardiner","Au stade"],"answer_index":1}`,
-		},
-		{
-			Section: "lecture", BlockType: "true_false", Level: "4ème année", SubjectCode: "francais",
-			Trimester: 1, ModuleNum: 2, Criterion: "C2", Points: 3, Difficulty: "easy", Topic: "Vrai ou Faux",
-			ContentJSON: `{"prompt":"J'écris « Vrai » ou « Faux » devant chaque phrase :","items":[{"statement":"Sami apporte un arrosoir rouge.","answer":false},{"statement":"Lina plante des fleurs jaunes.","answer":true},{"statement":"Les enfants sont contents de leur travail.","answer":true}]}`,
-		},
-		{
-			Section: "lecture", BlockType: "open_question", Level: "4ème année", SubjectCode: "francais",
-			Trimester: 1, ModuleNum: 2, Criterion: "C4", Points: 2, Difficulty: "medium", Topic: "Justification du texte",
-			ContentJSON: `{"prompt":"Pourquoi les enfants sont-ils heureux ? Je relève la phrase du texte.","lines":2,"answer":"Tous les enfants sont heureux car le jardin devient propre et coloré."}`,
-		},
-		{
-			Section: "langue", BlockType: "fill_blanks", Level: "4ème année", SubjectCode: "francais",
-			Trimester: 1, ModuleNum: 2, Criterion: "C5", Points: 3, Difficulty: "medium", Topic: "Homophones a / à",
-			ContentJSON: `{"prompt":"Je complète les phrases par « a » ou « à » :","word_bank":["a","à"],"sentences":["Sami [a] un joli cartable.","Lina va [à] l'école chaque matin.","La maîtresse [a] préparé un jeu [à] la récréation."]}`,
-		},
-		{
-			Section: "langue", BlockType: "fill_blanks", Level: "4ème année", SubjectCode: "francais",
-			Trimester: 2, ModuleNum: 4, Criterion: "C5", Points: 3, Difficulty: "medium", Topic: "Homophones et / est",
-			ContentJSON: `{"prompt":"Je complète les phrases par « et » ou « est » :","word_bank":["et","est"],"sentences":["Le jardin [est] grand [et] fleuri.","Mon ami [est] gentil [et] sérieux.","Le chat [est] sur le tapis."]}`,
-		},
-		{
-			Section: "langue", BlockType: "fill_blanks", Level: "4ème année", SubjectCode: "francais",
-			Trimester: 2, ModuleNum: 5, Criterion: "C5", Points: 3, Difficulty: "medium", Topic: "Conjugaison — Présent (1er groupe)",
-			ContentJSON: `{"prompt":"Je conjugue les verbes entre parenthèses au présent :","word_bank":[],"sentences":["Les élèves (chanter) [chantent] une belle chanson.","Tu (dessiner) [dessines] un arbre vert.","Nous (préparer) [préparons] la fête de l'école."]}`,
-		},
-		{
-			Section: "langue", BlockType: "scramble", Level: "4ème année", SubjectCode: "francais",
-			Trimester: 1, ModuleNum: 2, Criterion: "C3", Points: 2, Difficulty: "easy", Topic: "Ordre de la phrase",
-			ContentJSON: `{"prompt":"Je remets les mots en ordre pour former une phrase correcte :","chunks":["les fleurs","arrose","Le petit garçon","du jardin."],"answer":"Le petit garçon arrose les fleurs du jardin."}`,
-		},
-		{
-			Section: "langue", BlockType: "matching", Level: "4ème année", SubjectCode: "francais",
-			Trimester: 2, ModuleNum: 3, Criterion: "C5", Points: 2, Difficulty: "easy", Topic: "Pronoms personnels",
-			ContentJSON: `{"prompt":"Je relie chaque sujet au verbe qui convient :","pairs":[{"left":"Je","right":"mange une pomme."},{"left":"Nous","right":"jouons dans la cour."},{"left":"Les filles","right":"lisent une histoire."}]}`,
-		},
-		{
-			Section: "production", BlockType: "production_ecrite", Level: "4ème année", SubjectCode: "francais",
-			Trimester: 1, ModuleNum: 2, Criterion: "C1", Points: 6, Difficulty: "medium", Topic: "Raconter une scène de classe / jardin",
-			ContentJSON: `{"prompt":"Observe les images et écris un petit paragraphe (4 à 5 phrases) pour raconter comment les enfants ont nettoyé et décoré la cour de l'école.","lines":6,"toolbox":{"nouns":["la cour","les élèves","les fleurs","un arrosoir","la maîtresse"],"verbs":["nettoyer","planter","arroser","décorer","être heureux"],"connectors":["D'abord,","Ensuite,","Puis,","Enfin,"]},"panels":[],"model_answer":"D'abord, les élèves ramassent les papiers dans la cour. Ensuite, Sami et Lina plantent de jolies fleurs. Puis, ils arrosent les plantes avec de l'eau fraîche. Enfin, la maîtresse félicite tous les enfants."}`,
-		},
-	}
-	for i := range starters {
-		if err := tx.Create(&starters[i]).Error; err != nil {
-			return err
-		}
-	}
-	return nil
+	return EnsureFrenchQuestionBank(tx)
 }
