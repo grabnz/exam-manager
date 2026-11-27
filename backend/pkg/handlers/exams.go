@@ -1003,58 +1003,38 @@ type illustrationSuggestion struct {
 var builtinIllustrations = []struct {
 	id       string
 	title    string
+	url      string
 	keywords []string
-	svg      string
 }{
 	{
-		id: "lofi-famille", title: "La famille heureuse (Lofi Flat Art)",
-		keywords: []string{"famille", "parents", "maison", "enfant", "enfants", "ami", "amis", "عائلة", "أسرة"},
-		svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200"><rect width="320" height="200" fill="#FFFDF9"/><ellipse cx="160" cy="176" rx="126" ry="12" fill="#EFECE4"/><rect x="42" y="34" width="236" height="136" rx="22" fill="#F4F8F9"/><circle cx="252" cy="58" r="18" fill="#FEF3C7"/><path d="M58 170V122C58 104 72 94 92 94C112 94 126 104 126 122V170Z" fill="#B9DDE3" stroke="#1C252C" stroke-width="2" stroke-linejoin="round"/><circle cx="92" cy="70" r="18" fill="#FDE6D2" stroke="#1C252C" stroke-width="2"/><path d="M74 68C76 54 108 54 110 68" fill="#334155" stroke="#1C252C" stroke-width="2"/><path d="M86 73Q92 78 98 73" fill="none" stroke="#1C252C" stroke-width="1.8" stroke-linecap="round"/><path d="M194 170V120C194 102 208 92 228 92C248 92 262 102 262 120V170Z" fill="#FBCFE8" stroke="#1C252C" stroke-width="2" stroke-linejoin="round"/><circle cx="228" cy="68" r="18" fill="#FDE6D2" stroke="#1C252C" stroke-width="2"/><path d="M208 72C208 50 248 50 248 74C244 60 212 60 208 72Z" fill="#475569" stroke="#1C252C" stroke-width="2"/><path d="M222 72Q228 77 234 72" fill="none" stroke="#1C252C" stroke-width="1.8" stroke-linecap="round"/><path d="M126 170V136C126 123 136 116 149 116C162 116 172 123 172 136V170Z" fill="#FDE68A" stroke="#1C252C" stroke-width="2" stroke-linejoin="round"/><circle cx="149" cy="98" r="14" fill="#FDE6D2" stroke="#1C252C" stroke-width="2"/><path d="M144 101Q149 105 154 101" fill="none" stroke="#1C252C" stroke-width="1.6" stroke-linecap="round"/><path d="M168 170V140C168 129 177 122 188 122C199 122 208 129 208 140V170Z" fill="#A7F3D0" stroke="#1C252C" stroke-width="2" stroke-linejoin="round"/><circle cx="188" cy="106" r="12" fill="#FDE6D2" stroke="#1C252C" stroke-width="2"/><path d="M184 109Q188 112 192 109" fill="none" stroke="#1C252C" stroke-width="1.6" stroke-linecap="round"/></svg>`,
+		id: "lofi-famille", title: "La famille à la maison",
+		url:      "/illustrations/famille.jpg",
+		keywords: []string{"famille", "parents", "maison", "enfant", "enfants", "ami", "amis", "cuisine", "solidarité", "عائلة", "أسرة"},
 	},
 	{
-		id: "lofi-ecole", title: "L'école primaire ensoleillée (Lofi)",
-		keywords: []string{"école", "ecole", "classe", "cour", "élèves", "rentrée", "مدرسة"},
-		svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200"><rect width="320" height="200" fill="#FFFDF9"/><circle cx="268" cy="44" r="20" fill="#FDE68A"/><ellipse cx="160" cy="176" rx="138" ry="12" fill="#E7EFE9"/><rect x="68" y="76" width="184" height="96" rx="10" fill="#F8FAFC" stroke="#1C252C" stroke-width="2"/><polygon points="56,78 160,30 264,78" fill="#B9DDE3" stroke="#1C252C" stroke-width="2" stroke-linejoin="round"/><path d="M142 172V124C142 114 150 108 160 108C170 108 178 114 178 124V172Z" fill="#FCD34D" stroke="#1C252C" stroke-width="2"/><rect x="86" y="102" width="34" height="30" rx="5" fill="#E0F2FE" stroke="#1C252C" stroke-width="1.8"/><rect x="200" y="102" width="34" height="30" rx="5" fill="#E0F2FE" stroke="#1C252C" stroke-width="1.8"/><circle cx="160" cy="64" r="11" fill="#FFF" stroke="#1C252C" stroke-width="1.8"/><path d="M160 58V64L165 67" fill="none" stroke="#1C252C" stroke-width="1.8" stroke-linecap="round"/><path d="M40 172V126" stroke="#78350F" stroke-width="3" stroke-linecap="round"/><circle cx="40" cy="112" r="20" fill="#A7F3D0" stroke="#1C252C" stroke-width="1.8"/><path d="M280 172V132" stroke="#78350F" stroke-width="3" stroke-linecap="round"/><circle cx="280" cy="118" r="18" fill="#BBF7D0" stroke="#1C252C" stroke-width="1.8"/></svg>`,
+		id: "lofi-ecole", title: "La cour de l'école",
+		url:      "/illustrations/ecole.jpg",
+		keywords: []string{"école", "ecole", "classe", "cour", "élèves", "rentrée", "cartable", "maîtresse", "مدرسة"},
 	},
 	{
-		id: "lofi-jardin", title: "Le jardin fleuri et l'arbre (Lofi)",
-		keywords: []string{"jardin", "arbre", "fleur", "fleurs", "arroser", "nature", "environnement", "plante", "حديقة", "شجرة"},
-		svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200"><rect width="320" height="200" fill="#FFFDF9"/><circle cx="256" cy="46" r="22" fill="#FEF08A"/><path d="M18 168Q160 144 302 168L302 190L18 190Z" fill="#DCFCE7"/><path d="M96 164V100" stroke="#78350F" stroke-width="6" stroke-linecap="round"/><circle cx="96" cy="76" r="34" fill="#86EFAC" stroke="#1C252C" stroke-width="2"/><circle cx="72" cy="86" r="20" fill="#A7F3D0" stroke="#1C252C" stroke-width="2"/><circle cx="122" cy="88" r="20" fill="#A7F3D0" stroke="#1C252C" stroke-width="2"/><path d="M188 164V128M226 164V134M260 164V130" stroke="#15803D" stroke-width="2.2" stroke-linecap="round"/><circle cx="188" cy="122" r="10" fill="#FBCFE8" stroke="#1C252C" stroke-width="1.8"/><circle cx="188" cy="122" r="4" fill="#FDE047"/><circle cx="226" cy="128" r="9" fill="#FDE68A" stroke="#1C252C" stroke-width="1.8"/><circle cx="260" cy="124" r="10" fill="#DDD6FE" stroke="#1C252C" stroke-width="1.8"/><rect x="138" y="138" width="28" height="22" rx="6" fill="#93C5FD" stroke="#1C252C" stroke-width="1.8"/><path d="M166 146L180 138M138 144C128 144 128 156 138 156" fill="none" stroke="#1C252C" stroke-width="1.8" stroke-linecap="round"/></svg>`,
+		id: "lofi-jardin", title: "Le jardin de l'école",
+		url:      "/illustrations/jardin.jpg",
+		keywords: []string{"jardin", "arbre", "fleur", "fleurs", "arroser", "nature", "environnement", "plante", "forêt", "حديقة", "شجرة"},
 	},
 	{
-		id: "lofi-oiseau", title: "Petit oiseau sur une branche (Lofi)",
-		keywords: []string{"oiseau", "animal", "animaux", "branche", "voler", "nature", "عصفور"},
-		svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200"><rect width="320" height="200" fill="#FFFDF9"/><circle cx="160" cy="100" r="74" fill="#F0F9FF"/><path d="M32 146Q158 122 288 138" fill="none" stroke="#78350F" stroke-width="5" stroke-linecap="round"/><ellipse cx="78" cy="132" rx="14" ry="7" transform="rotate(-24 78 132)" fill="#A7F3D0" stroke="#1C252C" stroke-width="1.8"/><ellipse cx="238" cy="124" rx="14" ry="7" transform="rotate(20 238 124)" fill="#A7F3D0" stroke="#1C252C" stroke-width="1.8"/><path d="M116 112C116 78 154 66 182 78C196 84 206 72 216 80C224 87 218 98 208 102L228 106L208 114C198 132 166 136 138 128L106 138L116 120Z" fill="#BAE6FD" stroke="#1C252C" stroke-width="2" stroke-linejoin="round"/><path d="M138 98C152 90 174 92 184 106C166 112 148 110 138 98Z" fill="#7DD3FC" stroke="#1C252C" stroke-width="1.8"/><circle cx="198" cy="88" r="3" fill="#1C252C"/><path d="M154 130V140M170 130V140" stroke="#1C252C" stroke-width="2" stroke-linecap="round"/></svg>`,
+		id: "lofi-oiseau", title: "L'oiseau sur la branche",
+		url:      "/illustrations/oiseau.jpg",
+		keywords: []string{"oiseau", "animal", "animaux", "branche", "voler", "nature", "chat", "chien", "عصفور"},
 	},
 	{
-		id: "lofi-lecture", title: "Coin lecture et cahiers (Lofi)",
-		keywords: []string{"livre", "lire", "lecture", "cahier", "bibliothèque", "devoir", "étudier", "كتاب", "قراءة"},
-		svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200"><rect width="320" height="200" fill="#FFFDF9"/><rect x="40" y="148" width="240" height="14" rx="7" fill="#E7E5DF"/><path d="M72 62H148C155 62 160 67 160 74V146C160 140 154 136 146 136H72Z" fill="#E0F2FE" stroke="#1C252C" stroke-width="2" stroke-linejoin="round"/><path d="M248 62H172C165 62 160 67 160 74V146C160 140 166 136 174 136H248Z" fill="#FEF3C7" stroke="#1C252C" stroke-width="2" stroke-linejoin="round"/><path d="M90 84H138M90 98H134M90 112H128M182 84H230M182 98H226M182 112H220" stroke="#475569" stroke-width="2" stroke-linecap="round"/><rect x="256" y="102" width="24" height="46" rx="6" fill="#FBCFE8" stroke="#1C252C" stroke-width="1.8"/><path d="M264 102L260 76M272 102L276 80" stroke="#0F4C5C" stroke-width="3" stroke-linecap="round"/></svg>`,
+		id: "lofi-lecture", title: "Coin lecture et cahiers",
+		url:      "/illustrations/lecture.jpg",
+		keywords: []string{"livre", "lire", "lecture", "cahier", "bibliothèque", "devoir", "étudier", "écrire", "ordinateur", "كتاب", "قراءة"},
 	},
 	{
-		id: "lofi-sante", title: "Santé et repas équilibré (Lofi)",
-		keywords: []string{"santé", "sante", "pomme", "fruits", "légumes", "hygiène", "médecin", "repas", "صحة"},
-		svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200"><rect width="320" height="200" fill="#FFFDF9"/><ellipse cx="160" cy="170" rx="120" ry="12" fill="#EFECE4"/><path d="M84 114H206C206 146 182 164 145 164C108 164 84 146 84 114Z" fill="#B9DDE3" stroke="#1C252C" stroke-width="2"/><circle cx="122" cy="100" r="22" fill="#FDA4AF" stroke="#1C252C" stroke-width="2"/><path d="M122 78C124 68 132 64 138 66" fill="none" stroke="#15803D" stroke-width="2.2" stroke-linecap="round"/><circle cx="168" cy="96" r="20" fill="#FDE047" stroke="#1C252C" stroke-width="2"/><rect x="224" y="88" width="38" height="74" rx="8" fill="#E0F2FE" stroke="#1C252C" stroke-width="2"/><rect x="226" y="114" width="34" height="46" rx="5" fill="#7DD3FC"/></svg>`,
-	},
-	{
-		id: "lofi-sport", title: "Jeu et sport dans le parc (Lofi)",
-		keywords: []string{"sport", "ballon", "jouer", "jeu", "stade", "récréation", "courir", "رياضة", "كرة"},
-		svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200"><rect width="320" height="200" fill="#FFFDF9"/><path d="M18 162Q160 144 302 162L302 188L18 188Z" fill="#DCFCE7"/><circle cx="160" cy="102" r="46" fill="#FFFFFF" stroke="#1C252C" stroke-width="2.2"/><polygon points="160,78 180,92 172,116 148,116 140,92" fill="#0F4C5C" stroke="#1C252C" stroke-width="1.8"/><path d="M160 56V78M203 88L180 92M190 138L172 116M130 138L148 116M117 88L140 92" stroke="#1C252C" stroke-width="2"/></svg>`,
-	},
-	{
-		id: "lofi-ordinateur", title: "Bureau et ordinateur Lofi",
-		keywords: []string{"ordinateur", "médias", "travail", "science", "écrire", "journal", "حاسوب"},
-		svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200"><rect width="320" height="200" fill="#FFFDF9"/><rect x="34" y="154" width="252" height="14" rx="7" fill="#E7E5DF"/><rect x="92" y="60" width="136" height="86" rx="10" fill="#E0F2FE" stroke="#1C252C" stroke-width="2"/><rect x="104" y="72" width="112" height="62" rx="5" fill="#FFFFFF" stroke="#1C252C" stroke-width="1.5"/><path d="M74 146H246L238 154H82Z" fill="#CBD5E1" stroke="#1C252C" stroke-width="2" stroke-linejoin="round"/><path d="M118 90H176M118 104H198M118 118H162" stroke="#0F4C5C" stroke-width="2.2" stroke-linecap="round"/><circle cx="256" cy="52" r="16" fill="#FEF08A" stroke="#1C252C" stroke-width="1.8"/><path d="M256 68V154" stroke="#1C252C" stroke-width="2.2"/></svg>`,
-	},
-	{
-		id: "lofi-plage", title: "Vacances et mer calme (Lofi)",
-		keywords: []string{"plage", "vacances", "mer", "soleil", "voyage", "été", "فصل الصيف", "بحر"},
-		svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200"><rect width="320" height="200" fill="#FFFDF9"/><circle cx="246" cy="50" r="24" fill="#FDE047"/><path d="M16 130Q96 116 176 130T304 130L304 164L16 164Z" fill="#BAE6FD"/><path d="M16 154Q160 142 304 158L304 190L16 190Z" fill="#FEF3C7"/><path d="M98 158V86" stroke="#78350F" stroke-width="3" stroke-linecap="round"/><path d="M52 94C64 66 132 66 144 94Z" fill="#FDA4AF" stroke="#1C252C" stroke-width="2" stroke-linejoin="round"/><path d="M206 122L236 82L252 122Z" fill="#FFFFFF" stroke="#1C252C" stroke-width="1.8" stroke-linejoin="round"/><path d="M196 124H262L252 134H206Z" fill="#0F4C5C" stroke="#1C252C" stroke-width="1.8"/></svg>`,
-	},
-	{
-		id: "lofi-animaux", title: "Le chat et le chien amis (Lofi)",
-		keywords: []string{"chat", "chien", "animal", "animaux", "ami", "قط", "حيوانات"},
-		svg: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 200"><rect width="320" height="200" fill="#FFFDF9"/><ellipse cx="160" cy="170" rx="116" ry="12" fill="#EFECE4"/><path d="M84 166V116C84 102 96 92 112 92C128 92 140 102 140 116V166Z" fill="#FED7AA" stroke="#1C252C" stroke-width="2"/><polygon points="88,98 84,74 104,88" fill="#FED7AA" stroke="#1C252C" stroke-width="2" stroke-linejoin="round"/><polygon points="136,98 140,74 120,88" fill="#FED7AA" stroke="#1C252C" stroke-width="2" stroke-linejoin="round"/><circle cx="104" cy="112" r="2.5" fill="#1C252C"/><circle cx="120" cy="112" r="2.5" fill="#1C252C"/><path d="M108 120Q112 124 116 120" fill="none" stroke="#1C252C" stroke-width="1.8" stroke-linecap="round"/><path d="M178 166V112C178 96 192 86 210 86C228 86 242 96 242 112V166Z" fill="#DDD6FE" stroke="#1C252C" stroke-width="2"/><ellipse cx="178" cy="108" rx="10" ry="20" fill="#C4B5FD" stroke="#1C252C" stroke-width="2"/><ellipse cx="242" cy="108" rx="10" ry="20" fill="#C4B5FD" stroke="#1C252C" stroke-width="2"/><circle cx="201" cy="110" r="2.5" fill="#1C252C"/><circle cx="219" cy="110" r="2.5" fill="#1C252C"/><ellipse cx="210" cy="118" rx="5" ry="3.5" fill="#1C252C"/></svg>`,
+		id: "lofi-sport", title: "Jeu et sport au parc",
+		url:      "/illustrations/sport.jpg",
+		keywords: []string{"sport", "ballon", "jouer", "jeu", "stade", "récréation", "courir", "santé", "parc", "رياضة", "كرة"},
 	},
 }
 
@@ -1064,9 +1044,9 @@ func (h *ExamsHandler) SearchIllustrations(w http.ResponseWriter, r *http.Reques
 	qLow := strings.ToLower(q)
 	results := make([]illustrationSuggestion, 0)
 
-	// 1. Curated Lofi Linear / Flat Art Adouci SVG scenes (always ranked top when matched!)
+	// 1. Studio-grade Lofi Linear / Flat Art Adouci illustrations bundled with the app
 	for _, item := range builtinIllustrations {
-		score := 80
+		score := 86
 		matched := false
 		for _, kw := range item.keywords {
 			if qLow != "" && (strings.Contains(qLow, kw) || strings.Contains(kw, qLow)) {
@@ -1076,15 +1056,14 @@ func (h *ExamsHandler) SearchIllustrations(w http.ResponseWriter, r *http.Reques
 			}
 		}
 		if qLow == "" || matched {
-			dataURI := "data:image/svg+xml;utf8," + url.PathEscape(item.svg)
-			reasons := []string{"Lofi Flat Art Adouci", "رسم متجهي نقي"}
+			reasons := []string{"Lofi Linear · Flat Art Adouci", "جودة طباعة عالية"}
 			if matched {
 				reasons = append([]string{"تطابق مباشر"}, reasons...)
 			}
 			results = append(results, illustrationSuggestion{
 				ID:         item.id,
 				Title:      item.title,
-				URL:        dataURI,
+				URL:        item.url,
 				Source:     "builtin_svg",
 				PrintScore: score,
 				Reasons:    reasons,
@@ -1092,24 +1071,7 @@ func (h *ExamsHandler) SearchIllustrations(w http.ResponseWriter, r *http.Reques
 		}
 	}
 
-	// 2. Custom Lofi Linear / Flat Art Adouci AI Illustration card for ANY French scene
-	if q != "" {
-		styleSuffix := "soft lofi linear illustration, flat art adouci, French children book editorial style, thin clean ink outlines, gentle muted pastel palette, pure white background, minimal school worksheet drawing, no text, no letters"
-		if bw {
-			styleSuffix = "clean minimalist lofi linear black and white ink drawing, French primary school textbook coloring-book line art, soft clean outlines, pure white background, no shading, no text, no letters"
-		}
-		aiURL := "https://image.pollinations.ai/prompt/" + url.PathEscape(q+", "+styleSuffix) + "?width=640&height=420&nologo=true&seed=42"
-		results = append(results, illustrationSuggestion{
-			ID:         "lofi-ai-" + url.PathEscape(qLow),
-			Title:      fmt.Sprintf("Lofi Art : %s", q),
-			URL:        aiURL,
-			Source:     "lofi_ai",
-			PrintScore: 96,
-			Reasons:    []string{"Lofi Linear / Flat Art Adouci", "مولّد خصيصاً للسؤال"},
-		})
-	}
-
-	// 3. ARASAAC Educational School Pictograms (additional options)
+	// 2. ARASAAC Educational School Pictograms (additional options for specific vocabulary)
 	if q != "" {
 		results = append(results, searchArasaac(q, bw)...)
 	}

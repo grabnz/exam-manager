@@ -86,8 +86,8 @@ export default function ExamEditor() {
   const [suggestions, setSuggestions] = useState<ScoredSuggestion[]>([])
   const [loadingSuggest, setLoadingSuggest] = useState(false)
 
-  const [imgQuery, setImgQuery] = useState('école')
-  const [imgBW, setImgBW] = useState(true)
+  const [imgQuery, setImgQuery] = useState('')
+  const [imgBW, setImgBW] = useState(false)
   const [imgResults, setImgResults] = useState<IllustrationSuggestion[]>([])
   const [loadingImg, setLoadingImg] = useState(false)
   const [activeImageTarget, setActiveImageTarget] = useState<string | null>(null) // block id
@@ -142,7 +142,7 @@ export default function ExamEditor() {
   useEffect(() => {
     if (paper) {
       void loadSuggestions('')
-      void searchImages('école', true)
+      void searchImages('', false)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paper?.id])
