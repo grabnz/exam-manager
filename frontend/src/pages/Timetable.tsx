@@ -8,7 +8,10 @@ import { useAuth } from '../auth'
 import { subjectStyle } from '../lib/subjectStyle'
 import AppShell from '../components/AppShell'
 import { useUI } from '../components/ui'
-import { PlusIcon, XIcon, LockIcon } from '../components/icons'
+import {
+  PlusIcon, XIcon, PinIcon, SparklesIcon, PrinterIcon,
+  DoorOpenIcon, AlertIcon, TrashIcon,
+} from '../components/icons'
 
 const DAYS = [
   { iso: 1, label: 'الإثنين' },
@@ -145,18 +148,18 @@ export default function Timetable() {
       actions={
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={() => window.print()}
-                  className="arabic text-xs bg-surface border border-line hover:border-brand/40 text-ink px-3 py-2 rounded-xl font-medium transition">
-            طباعة
+                  className="arabic inline-flex items-center gap-1.5 text-xs bg-surface border border-line hover:border-brand/40 text-ink px-3 py-2 rounded-xl font-medium transition">
+            <PrinterIcon className="w-3.5 h-3.5 text-ink-muted" /> طباعة
           </button>
           {isAdmin && (
             <>
               <button onClick={() => setConfigOpen(true)}
-                      className="arabic text-xs bg-surface border border-line hover:border-brand/40 text-ink px-3 py-2 rounded-xl font-medium transition">
-                القاعات والبرنامج
+                      className="arabic inline-flex items-center gap-1.5 text-xs bg-surface border border-line hover:border-brand/40 text-ink px-3 py-2 rounded-xl font-medium transition">
+                <DoorOpenIcon className="w-3.5 h-3.5 text-brand" /> القاعات والبرنامج
               </button>
               <button onClick={() => { setGenOpen(true); if (!draft) void runGenerate('double') }}
-                      className="arabic text-xs bg-accent hover:bg-amber-600 text-white px-3.5 py-2 rounded-xl font-semibold shadow-sm transition">
-                ⚡ توليد تلقائي
+                      className="arabic inline-flex items-center gap-1.5 text-xs bg-accent hover:bg-amber-600 text-white px-3.5 py-2 rounded-xl font-semibold shadow-sm transition">
+                <SparklesIcon className="w-3.5 h-3.5" /> توليد تلقائي عادل
               </button>
               <button onClick={() => setAddPreset({})}
                       className="arabic inline-flex items-center gap-1 text-xs bg-brand hover:bg-brand-hover text-white px-3.5 py-2 rounded-xl font-semibold shadow-sm transition">
@@ -302,7 +305,7 @@ export default function Timetable() {
                                   }}
                                   className={`p-0.5 rounded ${s.is_pinned ? 'text-amber-700' : 'opacity-0 group-hover:opacity-70 hover:opacity-100'}`}
                                 >
-                                  <LockIcon className="w-3 h-3" />
+                                  <PinIcon className="w-3 h-3" />
                                 </button>
                                 <button
                                   type="button"
@@ -370,15 +373,22 @@ export default function Timetable() {
 
       {/* Auto-Generate Timetable Modal */}
       {isAdmin && genOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setGenOpen(false)}>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-ink/40 backdrop-blur-[2px] px-4 animate-fade-in" onClick={() => setGenOpen(false)}>
           <div onClick={e => e.stopPropagation()}
-               className="w-full max-w-2xl bg-surface rounded-3xl p-6 space-y-4 shadow-float max-h-[90vh] overflow-y-auto" dir="rtl">
+               className="w-full max-w-2xl bg-surface border border-line rounded-3xl p-6 space-y-4 shadow-float max-h-[90vh] overflow-y-auto animate-scale-in" dir="rtl">
             <div className="flex items-center justify-between">
-              <div>
-                <h3 className="arabic text-lg font-bold text-ink">⚡ محرك توليد جدول الأوقات العادل</h3>
-                <p className="arabic text-xs text-ink-muted">يحترم النصاب الأسبوعي لكل معلم، القاعات المتاحة، والحصص المثبّتة — بدون أي محاباة.</p>
+              <div className="flex items-center gap-3">
+                <span className="w-10 h-10 rounded-2xl bg-accent-light text-accent flex items-center justify-center flex-shrink-0">
+                  <SparklesIcon className="w-5 h-5" />
+                </span>
+                <div>
+                  <h3 className="arabic text-lg font-bold text-ink">محرك توليد جدول الأوقات العادل</h3>
+                  <p className="arabic text-xs text-ink-muted">يحترم النصاب الأسبوعي لكل معلم، القاعات المتاحة، والحصص المثبّتة — بدون أي محاباة.</p>
+                </div>
               </div>
-              <button onClick={() => setGenOpen(false)} className="text-ink-subtle hover:text-ink">✕</button>
+              <button onClick={() => setGenOpen(false)} className="p-1.5 rounded-lg text-ink-subtle hover:text-ink hover:bg-canvas transition">
+                <XIcon className="w-4 h-4" />
+              </button>
             </div>
 
             <div className="flex gap-2 flex-wrap">
@@ -417,7 +427,9 @@ export default function Timetable() {
                 {draft.warnings.length > 0 && (
                   <div className="bg-accent-soft border border-accent-light rounded-2xl p-3 space-y-1">
                     {draft.warnings.map((w, i) => (
-                      <p key={i} className="arabic text-xs text-amber-900">⚠ {w}</p>
+                      <p key={i} className="arabic text-xs text-amber-900 flex items-center gap-1.5">
+                        <AlertIcon className="w-3.5 h-3.5 text-accent flex-shrink-0" /> {w}
+                      </p>
                     ))}
                   </div>
                 )}
@@ -624,7 +636,9 @@ function RoomsCurriculumModal({ rooms, subjects, curricula, onClose, onChanged }
            className="w-full max-w-lg bg-surface rounded-3xl p-6 space-y-4 shadow-float max-h-[88vh] overflow-y-auto" dir="rtl">
         <div className="flex items-center justify-between">
           <h3 className="arabic text-base font-bold text-ink">إعدادات القاعات والبرنامج الأسبوعي</h3>
-          <button onClick={onClose} className="text-ink-subtle hover:text-ink">✕</button>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-ink-subtle hover:text-ink hover:bg-canvas transition">
+            <XIcon className="w-4 h-4" />
+          </button>
         </div>
         <div className="inline-flex bg-canvas rounded-xl p-1">
           <button onClick={() => setTab('rooms')}
@@ -667,7 +681,9 @@ function RoomsCurriculumModal({ rooms, subjects, curricula, onClose, onChanged }
                   <div className="flex items-center gap-2">
                     <span className="arabic text-[11px] bg-canvas text-ink-muted px-2 py-0.5 rounded-full">{r.room_type}</span>
                     <button onClick={async () => { await api.rooms.delete(r.id); await onChanged() }}
-                            className="text-xs text-ink-subtle hover:text-rose-600">✕</button>
+                            className="p-1 text-ink-subtle hover:text-rose-600 rounded-lg transition">
+                      <TrashIcon className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 </div>
               ))}

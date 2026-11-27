@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, AssignmentRow, CurriculumRow, Subject, UserRow, YearGroup } from '../../api/client'
 import { useUI } from '../../components/ui'
+import { AlertIcon, CheckIcon, PlusIcon, TrashIcon } from '../../components/icons'
 
 export default function Assignments() {
   const qc = useQueryClient()
@@ -90,8 +91,10 @@ export default function Assignments() {
                 <div key={t.id} className={`rounded-xl border p-2.5 ${over ? 'bg-rose-50/70 border-rose-200' : full ? 'bg-emerald-50/60 border-emerald-200' : 'bg-canvas border-line'}`}>
                   <div className="flex items-center justify-between text-xs mb-1.5">
                     <span className="arabic font-semibold text-ink truncate">{t.full_name || t.username}</span>
-                    <span className={`font-bold num ${over ? 'text-rose-700' : full ? 'text-emerald-700' : 'text-brand'}`} dir="ltr">
-                      {assigned}/{maxH}h {over ? '⚠' : full ? '✓' : ''}
+                    <span className={`inline-flex items-center gap-1 font-bold num ${over ? 'text-rose-700' : full ? 'text-emerald-700' : 'text-brand'}`} dir="ltr">
+                      {assigned}/{maxH}h
+                      {over && <AlertIcon className="w-3.5 h-3.5" />}
+                      {full && <CheckIcon className="w-3.5 h-3.5" />}
                     </span>
                   </div>
                   <div className="h-1.5 bg-white rounded-full overflow-hidden">
@@ -190,17 +193,17 @@ export default function Assignments() {
               <h2 className="arabic text-sm font-semibold text-gray-600 mb-2 text-right" dir="rtl">
                 {c.name} <span className="text-xs text-gray-400 font-normal">{c.year}</span>
               </h2>
-              <div className="bg-white border border-gray-200 rounded-xl divide-y divide-gray-100">
+              <div className="bg-surface border border-line rounded-2xl divide-y divide-line shadow-card">
                 {rows.length === 0 ? (
-                  <p className="arabic text-xs text-amber-600 px-4 py-3 text-right" dir="rtl">
-                    ⚠ لا معلم مسند لهذا القسم بعد
+                  <p className="arabic flex items-center gap-1.5 text-xs text-amber-700 px-4 py-3 text-right" dir="rtl">
+                    <AlertIcon className="w-3.5 h-3.5 text-accent" /> لا معلم مسند لهذا القسم بعد
                   </p>
                 ) : (
                   rows.map(a => (
                     <div key={a.id} className="flex items-center justify-between gap-3 px-4 py-2.5" dir="rtl">
                       <div className="flex items-center gap-2 flex-wrap min-w-0">
-                        <span className="arabic text-sm font-medium text-gray-800">{a.teacher_name}</span>
-                        <span className="arabic text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">{a.subject_name}</span>
+                        <span className="arabic text-sm font-semibold text-ink">{a.teacher_name}</span>
+                        <span className="arabic text-xs bg-brand-light text-brand px-2.5 py-0.5 rounded-full font-medium">{a.subject_name}</span>
                       </div>
                       <button
                         onClick={async () => {
@@ -212,8 +215,8 @@ export default function Assignments() {
                           })
                           if (ok) run(() => api.assignments.delete(a.id))
                         }}
-                        className="text-xs text-gray-300 hover:text-red-500 flex-shrink-0">
-                        ✕
+                        className="p-1.5 text-ink-subtle hover:text-rose-600 rounded-lg transition flex-shrink-0">
+                        <TrashIcon className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   ))
@@ -266,29 +269,29 @@ function AddAssignmentForm({ teachers, classes, subjects, existingByClass, onAdd
   if (!open) {
     return (
       <button onClick={() => setOpen(true)}
-              className="arabic w-full py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-medium transition">
-        + إسناد معلم إلى قسم
+              className="arabic w-full py-3 bg-brand hover:bg-brand-hover text-white rounded-2xl text-sm font-semibold shadow-sm transition inline-flex items-center justify-center gap-2">
+        <PlusIcon className="w-4 h-4" /> إسناد معلم إلى قسم
       </button>
     )
   }
 
   return (
-    <form onSubmit={submit} className="bg-white border border-blue-200 rounded-xl p-5 space-y-4" dir="rtl">
-      <h3 className="arabic font-semibold text-gray-800">إسناد جديد</h3>
+    <form onSubmit={submit} className="bg-surface border border-brand-mid rounded-3xl p-5 space-y-4 shadow-card" dir="rtl">
+      <h3 className="arabic font-bold text-ink">إسناد جديد</h3>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div>
-          <label className="arabic block text-xs font-medium text-gray-600 mb-1">المعلم</label>
+          <label className="arabic block text-xs font-semibold text-ink-muted mb-1">المعلم</label>
           <select value={teacherId} onChange={e => setTeacherId(e.target.value)}
-                  className="arabic w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                  className="arabic w-full bg-canvas/40 border border-line rounded-xl px-3.5 py-2 text-sm">
             <option value="">اختاروا…</option>
             {teachers.map(t => <option key={t.id} value={t.id}>{t.full_name || t.username}</option>)}
           </select>
         </div>
         <div>
-          <label className="arabic block text-xs font-medium text-gray-600 mb-1">القسم</label>
+          <label className="arabic block text-xs font-semibold text-ink-muted mb-1">القسم</label>
           <select value={classId} onChange={e => setClassId(e.target.value)}
-                  className="arabic w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
+                  className="arabic w-full bg-canvas/40 border border-line rounded-xl px-3.5 py-2 text-sm">
             <option value="">اختاروا…</option>
             {classes.map(c => <option key={c.id} value={c.id}>{c.name} ({c.year})</option>)}
           </select>
@@ -297,25 +300,25 @@ function AddAssignmentForm({ teachers, classes, subjects, existingByClass, onAdd
 
       <div>
         <div className="flex items-center justify-between flex-wrap gap-2 mb-2">
-          <label className="arabic text-xs font-medium text-gray-600">
+          <label className="arabic text-xs font-semibold text-ink-muted">
             المواد (يمكن اختيار عدة مواد أو استعمال اختصار جاهز)
           </label>
           <div className="flex flex-wrap gap-1.5">
             <button type="button" onClick={() => applyPreset(() => true)}
-                    className="arabic text-[11px] px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 font-medium">
+                    className="arabic text-[11px] px-2.5 py-1 rounded-xl bg-brand-light text-brand hover:bg-brand-mid/60 font-semibold transition">
               كل المواد (معلم فصل)
             </button>
             <button type="button" onClick={() => applyPreset(s => ARABIC_PACK.has(s.code))}
-                    className="arabic text-[11px] px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-medium">
+                    className="arabic text-[11px] px-2.5 py-1 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-semibold transition">
               مواد العربية
             </button>
             <button type="button" onClick={() => applyPreset(s => SCI_FR_PACK.has(s.code))}
-                    className="arabic text-[11px] px-2.5 py-1 rounded-lg bg-violet-50 text-violet-700 hover:bg-violet-100 font-medium">
+                    className="arabic text-[11px] px-2.5 py-1 rounded-xl bg-violet-50 text-violet-700 hover:bg-violet-100 font-semibold transition">
               العلمية والفرنسية
             </button>
             {subjectIds.size > 0 && (
               <button type="button" onClick={() => setSubjectIds(new Set())}
-                      className="arabic text-[11px] px-2 py-1 rounded-lg text-gray-400 hover:text-gray-600">
+                      className="arabic text-[11px] px-2 py-1 rounded-lg text-ink-subtle hover:text-ink">
                 مسح
               </button>
             )}
@@ -330,12 +333,12 @@ function AddAssignmentForm({ teachers, classes, subjects, existingByClass, onAdd
                 key={s.id}
                 onClick={() => toggleSubject(s.id)}
                 title={isAssigned ? 'مادة مسندة مسبقاً لهذا القسم' : undefined}
-                className={`arabic text-xs px-3 py-1.5 rounded-full border transition ${
+                className={`arabic text-xs px-3 py-1.5 rounded-full border font-medium transition ${
                   subjectIds.has(s.id)
-                    ? 'bg-blue-600 text-white border-blue-600'
+                    ? 'bg-brand text-white border-brand shadow-sm'
                     : isAssigned
-                    ? 'bg-gray-50 text-gray-400 border-dashed border-gray-300 hover:border-blue-300'
-                    : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                    ? 'bg-canvas text-ink-subtle border-dashed border-line hover:border-brand/40'
+                    : 'bg-surface text-ink-muted border-line hover:border-brand/40'
                 }`}
               >
                 {s.name_ar}{isAssigned && !subjectIds.has(s.id) ? ' ✓' : ''}
@@ -347,11 +350,11 @@ function AddAssignmentForm({ teachers, classes, subjects, existingByClass, onAdd
 
       <div className="flex gap-2">
         <button type="submit" disabled={!teacherId || !classId || subjectIds.size === 0}
-                className="arabic px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-medium">
+                className="arabic px-5 py-2 bg-brand hover:bg-brand-hover disabled:bg-gray-300 text-white rounded-xl text-sm font-semibold shadow-sm transition">
           إسناد
         </button>
         <button type="button" onClick={() => setOpen(false)}
-                className="arabic px-5 py-2 text-sm text-gray-500 hover:text-gray-700">
+                className="arabic px-5 py-2 text-sm text-ink-muted hover:text-ink transition">
           إلغاء
         </button>
       </div>

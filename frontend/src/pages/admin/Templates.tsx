@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, Subject, TemplateDef, TemplateSpec } from '../../api/client'
 import { groups as templateGroups } from '../../lib/grid'
 import { useUI } from '../../components/ui'
+import { LockIcon, CopyIcon, EditIcon, TrashIcon, PlusIcon } from '../../components/icons'
 
 export default function Templates() {
   const qc = useQueryClient()
@@ -48,10 +49,10 @@ export default function Templates() {
       <div className="flex flex-wrap gap-1.5">
         {subjects.map(s => (
           <button key={s.id} onClick={() => { setSubjectId(s.id); setEditingId(null) }}
-                  className={`arabic text-xs px-3 py-1.5 rounded-full border transition ${
+                  className={`arabic text-xs px-3.5 py-1.5 rounded-full border font-medium transition ${
                     activeSubject === s.id
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                      ? 'bg-brand text-white border-brand shadow-sm'
+                      : 'bg-surface text-ink-muted border-line hover:border-brand/40'
                   }`}>
             {s.name_ar}
           </button>
@@ -105,32 +106,32 @@ function TemplateCard({ templateId, isBuiltin, editing, onEdit, onClone, onDelet
   if (!tpl) return <div className="bg-white border border-gray-200 rounded-xl p-4 text-gray-300">…</div>
 
   return (
-    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-100">
+    <div className="bg-surface border border-line rounded-3xl overflow-hidden shadow-card">
+      <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-line">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
-          <span className="arabic text-sm font-semibold text-gray-800">{tpl.name}</span>
+          <span className="arabic text-sm font-bold text-ink">{tpl.name}</span>
           {tpl.is_builtin
-            ? <span className="arabic text-xs bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">جاهزة 🔒</span>
-            : <span className="arabic text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">مخصصة</span>}
-          <span className="arabic text-xs text-gray-400">
+            ? <span className="arabic inline-flex items-center gap-1 text-[11px] bg-canvas text-ink-muted px-2.5 py-0.5 rounded-full font-medium"><LockIcon className="w-3 h-3" /> جاهزة</span>
+            : <span className="arabic text-[11px] bg-brand-light text-brand px-2.5 py-0.5 rounded-full font-semibold">مخصصة</span>}
+          <span className="arabic text-xs text-ink-subtle">
             {tpl.final_formula === 'avg_groups' ? 'معدل المجالات'
               : tpl.final_formula === 'sum_capped' ? `مجموع ≤ ${tpl.final_cap ?? 20}` : 'مجموع المعايير'}
           </span>
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
           <button onClick={onClone}
-                  className="arabic text-xs text-gray-500 hover:text-blue-600 border border-gray-200 hover:border-blue-300 px-2 py-1 rounded-lg">
-            نسخ
+                  className="arabic inline-flex items-center gap-1 text-xs text-ink-muted hover:text-brand border border-line hover:border-brand/40 px-2.5 py-1.5 rounded-xl transition">
+            <CopyIcon className="w-3.5 h-3.5" /> نسخ
           </button>
           {!isBuiltin && (
             <>
               <button onClick={onEdit}
-                      className="arabic text-xs text-gray-500 hover:text-blue-600 border border-gray-200 hover:border-blue-300 px-2 py-1 rounded-lg">
-                {editing ? 'إغلاق' : 'تعديل'}
+                      className="arabic inline-flex items-center gap-1 text-xs text-ink-muted hover:text-brand border border-line hover:border-brand/40 px-2.5 py-1.5 rounded-xl transition">
+                <EditIcon className="w-3.5 h-3.5" /> {editing ? 'إغلاق' : 'تعديل'}
               </button>
               <button onClick={onDelete}
-                      className="text-xs text-gray-400 hover:text-red-500 border border-gray-200 hover:border-red-300 px-2 py-1 rounded-lg">
-                ✕
+                      className="p-2 text-ink-subtle hover:text-rose-600 border border-line hover:border-rose-300 rounded-xl transition">
+                <TrashIcon className="w-3.5 h-3.5" />
               </button>
             </>
           )}
@@ -277,8 +278,8 @@ function TemplateEditor({ tpl, onSaved, onError }: {
               </div>
             ))}
             <button onClick={() => setSection(si, { criteria: [...sec.criteria, { label: `مع${sec.criteria.length + 1}`, max_score: null }] })}
-                    className="arabic text-xs text-blue-600 border border-dashed border-blue-300 rounded-lg px-2 py-1 hover:bg-blue-50">
-              + معيار
+                    className="arabic inline-flex items-center gap-1 text-xs text-brand border border-dashed border-brand-mid rounded-xl px-2.5 py-1 hover:bg-brand-light/50 transition">
+              <PlusIcon className="w-3 h-3" /> معيار
             </button>
           </div>
         </div>
@@ -293,11 +294,11 @@ function TemplateEditor({ tpl, onSaved, onError }: {
                     criteria: [{ label: 'مع1', max_score: null }],
                   }],
                 }))}
-                className="arabic text-xs text-blue-600 border border-dashed border-blue-300 rounded-lg px-3 py-1.5 hover:bg-blue-50">
-          + قسم
+                className="arabic inline-flex items-center gap-1 text-xs text-brand border border-dashed border-brand-mid rounded-xl px-3 py-1.5 hover:bg-brand-light/50 transition">
+          <PlusIcon className="w-3.5 h-3.5" /> قسم
         </button>
         <button onClick={save} disabled={saving}
-                className="arabic mr-auto px-5 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 text-white rounded-lg text-sm font-medium">
+                className="arabic mr-auto px-5 py-2 bg-brand hover:bg-brand-hover disabled:bg-gray-300 text-white rounded-xl text-sm font-semibold shadow-sm transition">
           {saving ? 'جاري الحفظ…' : 'حفظ الشبكة'}
         </button>
       </div>

@@ -15,13 +15,13 @@ body {
   background-color: var(--bg-canvas);
   color: var(--text-ink);
   @apply antialiased;
-  font-family: 'IBM Plex Sans Arabic', system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
+  font-family: 'Cairo', system-ui, -apple-system, 'Segoe UI', Tahoma, sans-serif;
 }
 
 /* Arabic text direction for student names and labels */
 .arabic {
   direction: rtl;
-  font-family: 'IBM Plex Sans Arabic', 'Segoe UI', Tahoma, sans-serif;
+  font-family: 'Cairo', 'Segoe UI', Tahoma, sans-serif;
 }
 
 /* Tabular numbers for scores, averages, ranks, and schedules */

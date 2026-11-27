@@ -109,13 +109,13 @@ export default function Synthesis() {
           <ListSkeleton rows={6} />
         ) : selectedStudent ? (
           /* Printable Individual Student Report Card (بطاقة أعداد) */
-          <div className="max-w-xl mx-auto bg-white border border-gray-200 rounded-2xl p-6 space-y-5 shadow-sm print:border-0 print:shadow-none">
+          <div className="max-w-xl mx-auto bg-surface border border-line rounded-3xl p-6 space-y-5 shadow-float print:border-0 print:shadow-none">
             <div className="print:hidden flex items-center justify-between">
-              <button onClick={() => setSelectedStudentId(null)} className="arabic text-xs text-blue-600 hover:underline">
-                → العودة إلى الجدول الجامع
+              <button onClick={() => setSelectedStudentId(null)} className="arabic inline-flex items-center gap-1 text-xs text-brand font-semibold hover:underline">
+                <ArrowRightIcon className="w-3.5 h-3.5" /> العودة إلى الجدول الجامع
               </button>
-              <button onClick={() => window.print()} className="arabic text-xs bg-blue-600 text-white px-3 py-1.5 rounded-lg">
-                طباعة البطاقة
+              <button onClick={() => window.print()} className="arabic inline-flex items-center gap-1.5 text-xs bg-brand hover:bg-brand-hover text-white px-3.5 py-1.5 rounded-xl font-semibold shadow-sm transition">
+                <PrinterIcon className="w-3.5 h-3.5" /> طباعة البطاقة
               </button>
             </div>
             <div className="text-center border-b border-gray-200 pb-4">
@@ -227,7 +227,7 @@ export default function Synthesis() {
                         <td className="border border-gray-200 px-2 py-2 text-center print:hidden">
                           <button
                             onClick={() => setSelectedStudentId(st.student_id)}
-                            className="arabic text-xs text-blue-600 hover:underline font-medium"
+                            className="arabic text-xs text-brand hover:underline font-semibold"
                           >
                             عرض
                           </button>
@@ -263,10 +263,10 @@ export default function Synthesis() {
                 <button
                   key={s.id}
                   onClick={() => setProgSubjectId(s.id)}
-                  className={`arabic text-xs px-3 py-1.5 rounded-full border transition ${
+                  className={`arabic text-xs px-3.5 py-1.5 rounded-full border font-medium transition ${
                     activeProgSubject?.id === s.id
-                      ? 'bg-blue-600 text-white border-blue-600'
-                      : 'bg-white text-gray-600 border-gray-200 hover:border-blue-300'
+                      ? 'bg-brand text-white border-brand shadow-sm'
+                      : 'bg-surface text-ink-muted border-line hover:border-brand/40'
                   }`}
                 >
                   {s.name}
