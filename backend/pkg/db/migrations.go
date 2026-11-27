@@ -154,6 +154,7 @@ func Migrate(conn *gorm.DB) error {
 		&ExamPaper{},
 		&QuestionBlock{},
 		&SavedIllustration{},
+		&ExamGrading{},
 	}
 	for _, m := range models {
 		if err := conn.AutoMigrate(m); err != nil {
@@ -576,6 +577,16 @@ func ensureModernTables(conn *gorm.DB) {
 			"file_data" bytea NOT NULL,
 			"uploaded_by" text,
 			"created_at" timestamptz DEFAULT CURRENT_TIMESTAMP
+		)`,
+		`CREATE TABLE IF NOT EXISTS "exam_gradings" (
+			"id" text PRIMARY KEY,
+			"exam_paper_id" text NOT NULL,
+			"class_id" text NOT NULL,
+			"student_id" text NOT NULL,
+			"item_scores_json" text NOT NULL DEFAULT '{}',
+			"status" text NOT NULL DEFAULT 'present',
+			"total_score" double precision,
+			"updated_at" timestamptz DEFAULT CURRENT_TIMESTAMP
 		)`,
 	}
 	if conn.Dialector.Name() == "postgres" {

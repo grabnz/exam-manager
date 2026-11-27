@@ -287,6 +287,12 @@ export default function Exams() {
                             <PrinterIcon className="w-3.5 h-3.5" /> طباعة / إصلاح
                           </button>
                           <button
+                            onClick={() => navigate(`/exams/${ex.id}/grade`)}
+                            className="arabic inline-flex items-center gap-1 text-xs bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-800 px-3 py-1.5 rounded-xl font-semibold transition"
+                          >
+                            <CheckIcon className="w-3.5 h-3.5" /> ربط بقسم وتصحيح
+                          </button>
+                          <button
                             onClick={async () => {
                               const ny = await ui.prompt({
                                 title: 'إعادة استعمال الامتحان لسنة جديدة',

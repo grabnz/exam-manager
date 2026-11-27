@@ -158,6 +158,8 @@ func New() (http.Handler, error) {
 	mux.HandleFunc("DELETE /api/exams/{exam_id}", requireUser(examsH.Delete))
 	mux.HandleFunc("POST /api/exams/{exam_id}/clone", requireUser(examsH.Clone))
 	mux.HandleFunc("GET /api/exams/{exam_id}/attachment", requireUser(examsH.DownloadAttachment))
+	mux.HandleFunc("GET /api/exams/{exam_id}/grade/{class_id}", requireUser(examsH.GetGrading))
+	mux.HandleFunc("POST /api/exams/{exam_id}/grade/{class_id}", requireUser(examsH.SaveGrading))
 	mux.HandleFunc("GET /api/question-bank", requireUser(examsH.ListBank))
 	mux.HandleFunc("POST /api/question-bank", requireUser(examsH.CreateBankBlock))
 	mux.HandleFunc("DELETE /api/question-bank/{block_id}", requireUser(examsH.DeleteBankBlock))

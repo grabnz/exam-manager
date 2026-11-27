@@ -654,6 +654,68 @@ func TestFrenchExamStudioAndBank(t *testing.T) {
 	if bankOnlyRes.Mode != "bank_only" || bankOnlyRes.ExtractedBlocksCount < 3 || bankOnlyRes.ExtractedImagesCount != 1 {
 		t.Fatalf("unexpected bank_only response: %+v", bankOnlyRes)
 	}
+
+	// 6. Link Exam to a Class, save rapid per-exercise grades, verify ScoreSession sync & remediation analytics
+	clsRec := doReq(t, h, "POST", "/api/classes", tok, map[string]string{
+		"name": "الرابعة ب", "school_year": "2026-2027", "level": "السنة الرابعة",
+	})
+	var gCls struct{ ID string `json:"id"` }
+	_ = json.Unmarshal(clsRec.Body.Bytes(), &gCls)
+	s1Rec := doReq(t, h, "POST", "/api/classes/"+gCls.ID+"/students", tok, map[string]string{"full_name": "ياسمين"})
+	s2Rec := doReq(t, h, "POST", "/api/classes/"+gCls.ID+"/students", tok, map[string]string{"full_name": "كريم"})
+	var s1, s2 struct{ ID string `json:"id"` }
+	_ = json.Unmarshal(s1Rec.Body.Bytes(), &s1)
+	_ = json.Unmarshal(s2Rec.Body.Bytes(), &s2)
+
+	rec = doReq(t, h, "GET", "/api/exams/"+gen.ID+"/grade/"+gCls.ID, tok, nil)
+	if rec.Code != 200 {
+		t.Fatalf("get grading: got %d: %s", rec.Code, rec.Body.String())
+	}
+	var gData struct {
+		Items []struct {
+			Key       string  `json:"key"`
+			MaxPoints float64 `json:"max_points"`
+		} `json:"items"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &gData)
+	if len(gData.Items) < 3 {
+		t.Fatalf("expected >= 3 gradable items, got %d", len(gData.Items))
+	}
+	fullScores := map[string]float64{}
+	lowScores := map[string]float64{}
+	for _, it := range gData.Items {
+		fullScores[it.Key] = it.MaxPoints
+		lowScores[it.Key] = it.MaxPoints * 0.25
+	}
+
+	rec = doReq(t, h, "POST", "/api/exams/"+gen.ID+"/grade/"+gCls.ID, tok, map[string]any{
+		"sync_to_session": true,
+		"entries": []map[string]any{
+			{"student_id": s1.ID, "status": "present", "item_scores": fullScores},
+			{"student_id": s2.ID, "status": "present", "item_scores": lowScores},
+		},
+	})
+	if rec.Code != 200 {
+		t.Fatalf("save grading: got %d: %s", rec.Code, rec.Body.String())
+	}
+	var saveRes struct {
+		LinkedSessionID string `json:"linked_session_id"`
+		Analytics       struct {
+			ClassAvg            *float64         `json:"class_avg"`
+			PassCount           int              `json:"pass_count"`
+			RemediationStudents []map[string]any `json:"remediation_students"`
+		} `json:"analytics"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &saveRes)
+	if saveRes.LinkedSessionID == "" {
+		t.Fatalf("expected linked_session_id to be created & synced")
+	}
+	if saveRes.Analytics.ClassAvg == nil || *saveRes.Analytics.ClassAvg != 12.5 {
+		t.Fatalf("expected class_avg 12.5, got %v", saveRes.Analytics.ClassAvg)
+	}
+	if saveRes.Analytics.PassCount != 1 || len(saveRes.Analytics.RemediationStudents) != 1 {
+		t.Fatalf("expected 1 passing and 1 remediation student, got pass=%d rem=%d", saveRes.Analytics.PassCount, len(saveRes.Analytics.RemediationStudents))
+	}
 }
 
 func buildTestDOCX(t *testing.T) []byte {

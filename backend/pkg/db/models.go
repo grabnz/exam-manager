@@ -486,3 +486,23 @@ func (s *SavedIllustration) BeforeCreate(_ *gorm.DB) error {
 	}
 	return nil
 }
+
+// ExamGrading stores per-exercise scores for a student on a linked ExamPaper + Class,
+// enabling rapid red-pen transfer, automatic C1-C6 sync, remediation reports & ML calibration.
+type ExamGrading struct {
+	ID             string    `gorm:"primaryKey;type:text"`
+	ExamPaperID    string    `gorm:"not null;uniqueIndex:ux_exam_grading_paper_class_student;index"`
+	ClassID        string    `gorm:"not null;uniqueIndex:ux_exam_grading_paper_class_student;index"`
+	StudentID      string    `gorm:"not null;uniqueIndex:ux_exam_grading_paper_class_student"`
+	ItemScoresJSON string    `gorm:"type:text;not null;default:'{}'"`
+	Status         string    `gorm:"not null;default:'present'"` // present | absent | exempt
+	TotalScore     *float64  `gorm:"type:double precision"`
+	UpdatedAt      time.Time `gorm:"autoUpdateTime"`
+}
+
+func (g *ExamGrading) BeforeCreate(_ *gorm.DB) error {
+	if g.ID == "" {
+		g.ID = newID()
+	}
+	return nil
+}

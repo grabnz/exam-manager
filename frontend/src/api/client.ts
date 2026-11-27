@@ -637,6 +637,21 @@ export const api = {
       setTimeout(() => URL.revokeObjectURL(url), 5000)
       return null
     },
+    getGrading: (examId: string, classId: string) =>
+      req<ExamGradingData>(`/exams/${examId}/grade/${classId}`),
+    saveGrading: (
+      examId: string,
+      classId: string,
+      data: {
+        sync_to_session?: boolean
+        entries: { student_id: string; status: 'present' | 'absent' | 'exempt'; item_scores: Record<string, number> }[]
+      },
+    ) =>
+      req<ExamGradingSaveResult>(`/exams/${examId}/grade/${classId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      }),
   },
   questionBank: {
     list: (params?: { section?: string; level?: string; criterion?: string; q?: string }) => {
@@ -788,4 +803,64 @@ export interface IllustrationSuggestion {
   source: 'builtin_svg' | 'arasaac' | 'lofi_ai' | 'saved'
   print_score: number
   reasons: string[]
+}
+
+export interface GradingItem {
+  key: string
+  block_id: string
+  bank_id: string
+  section: string
+  label: string
+  criterion: string
+  max_points: number
+}
+
+export interface StudentGradingRow {
+  student_id: string
+  student_name: string
+  order_index: number
+  status: 'present' | 'absent' | 'exempt'
+  item_scores: Record<string, number>
+  total_score: number | null
+}
+
+export interface GradingAnalytics {
+  class_avg: number | null
+  graded_count: number
+  total_students: number
+  pass_count: number
+  pass_rate: number
+  item_stats: {
+    key: string
+    label: string
+    section: string
+    criterion: string
+    max_points: number
+    avg_score: number
+    pass_rate: number
+    graded_count: number
+    struggling_students: string[]
+  }[]
+  remediation_students: {
+    student_id: string
+    student_name: string
+    total_score: number
+    weak_areas: string[]
+  }[]
+}
+
+export interface ExamGradingData {
+  exam: ExamPaper
+  class: { id: string; name: string; level?: string | null }
+  items: GradingItem[]
+  students: StudentGradingRow[]
+  linked_session_id: string
+  analytics: GradingAnalytics
+}
+
+export interface ExamGradingSaveResult {
+  ok: boolean
+  linked_session_id: string
+  students: StudentGradingRow[]
+  analytics: GradingAnalytics
 }

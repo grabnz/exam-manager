@@ -474,6 +474,14 @@ export default function ExamEditor() {
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
+            {!isDraft && (
+              <button
+                onClick={() => navigate(`/exams/${id}/grade`)}
+                className="arabic inline-flex items-center gap-1.5 text-xs bg-amber-50 border border-amber-200 hover:bg-amber-100 text-amber-900 px-3 py-2 rounded-xl font-semibold transition"
+              >
+                <CheckIcon className="w-3.5 h-3.5" /> ربط بقسم وتصحيح
+              </button>
+            )}
             <button
               onClick={() => void handleSave(true)}
               disabled={saving}

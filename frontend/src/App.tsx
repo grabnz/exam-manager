@@ -24,6 +24,7 @@ import Profile from './pages/Profile'
 import Exams from './pages/Exams'
 import ExamEditor from './pages/ExamEditor'
 import ExamPrint from './pages/ExamPrint'
+import ExamGrade from './pages/ExamGrade'
 
 export default function App() {
   useEffect(() => { startQueueSync() }, [])
@@ -53,6 +54,7 @@ export default function App() {
             <Route path="/exams"            element={<RequireAuth><Exams /></RequireAuth>} />
             <Route path="/exams/:id"        element={<RequireAuth><ExamEditor /></RequireAuth>} />
             <Route path="/exams/:id/print"  element={<RequireAuth><ExamPrint /></RequireAuth>} />
+            <Route path="/exams/:id/grade"  element={<RequireAuth><ExamGrade /></RequireAuth>} />
             <Route path="/profile"          element={<RequireAuth><Profile /></RequireAuth>} />
           </Routes>
           <BottomNav />
